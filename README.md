@@ -8,3 +8,4 @@ This repository integrates an automated data orchestration layer, a scalable .NE
 
 ## 🏗️ System Architecture
 
++---------------------------------------+|       Angular 18 Management UI        ||          (fabric-frontend)            |+---------------------------------------+│▼ [HTTP REST / WebSockets]+---------------------------------------+|        .NET 8 Core API Gateway        ||            (FabricGateway)            |+---------------------------------------+│▼ [Subprocess / gRPC Triggers]+---------------------------------------+|        Mage AI Pipeline Engine        ||           (my_mage_project)           |+---------------------------------------+│┌─────────────────────┴─────────────────────┐▼                                           ▼[ dbt Core Models ]                         [ Infrastructure ]- Silver: stg_users, stg_orders             - AWS EMR Ingestion- Gold: customer_retention                  - SSH Tunneling Proxies

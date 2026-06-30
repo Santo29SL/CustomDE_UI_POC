@@ -1,0 +1,577 @@
+<div class="dashboard-container">
+  <!-- Sidebar Navigation -->
+  <aside class="sidebar">
+    <div class="logo-section">
+      <div class="logo-icon">M</div>
+      <div class="logo-text">Mage GUI</div>
+    </div>
+
+    <nav class="nav-group">
+      <div class="nav-item" [class.active]="currentTab() === 'ingest'" (click)="setTab('ingest')">
+        <span class="nav-icon">📥</span>
+        <span>Data Ingestion</span>
+      </div>
+      <div class="nav-item" [class.active]="currentTab() === 'notebook'" (click)="setTab('notebook')">
+        <span class="nav-icon">💻</span>
+        <span>Notebook Editor</span>
+      </div>
+      <div class="nav-item" [class.active]="currentTab() === 'pipelines'" (click)="setTab('pipelines')">
+        <span class="nav-icon">⚡</span>
+        <span>Pipeline Lineage</span>
+      </div>
+      <div class="nav-item" [class.active]="currentTab() === 'visualizer'" (click)="setTab('visualizer')">
+        <span class="nav-icon">📊</span>
+        <span>Superset Embed</span>
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="status-indicator">
+        <span class="status-dot"></span>
+        <span>Mage Engine Active</span>
+      </div>
+      <div style="margin-top: 0.5rem; text-transform: capitalize;">Project: {{ projectName() }}</div>
+      <div style="font-size: 0.7rem; color: var(--text-secondary)">Gateway: Port 5000</div>
+      <button class="btn btn-secondary" style="margin-top: 1rem; padding: 0.4rem; font-size: 0.75rem;" (click)="settingsModalOpen.set(true)">
+        ⚙️ Settings Configuration
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main Content Area -->
+  <main class="main-content">
+    <header class="header-bar">
+      <div class="header-title">
+        @if (currentTab() === 'ingest') { <h2>Database Ingestion Controller</h2> }
+        @if (currentTab() === 'notebook') { <h2>Code Editor & Query Console</h2> }
+        @if (currentTab() === 'pipelines') { <h2>Pipeline Lineage DAG</h2> }
+        @if (currentTab() === 'visualizer') { <h2>Apache Superset Dashboard</h2> }
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-secondary btn-sm" (click)="initializeProjectSchema()">
+          ➕ New Project Schema
+        </button>
+        <div class="inline-loading" style="font-size: 0.8rem; background: var(--bg-active); padding: 0.35rem 0.75rem; border: 1px solid var(--border-subtle)">
+          <span style="color: var(--accent-green)">●</span> Local Database Connected
+        </div>
+      </div>
+    </header>
+
+    <div class="tab-viewport">
+      <!-- 1. DATA INGESTION TAB -->
+      @if (currentTab() === 'ingest') {
+        <div class="ingest-grid">
+          <div class="glass-panel" style="display: flex; flex-direction: column; gap: 1.25rem;">
+            <h3>Ingestion Data Source</h3>
+            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.5rem;">
+              Select a data source from your project website database (MongoDB local/Atlas, or local MySQL Workbench) to load into your custom PostgreSQL bronze staging layer.
+            </p>
+
+            <div class="source-selector-tabs">
+              <div class="source-tab" [class.active]="selectedSourceType() === 'mongodb'" (click)="selectedSourceType.set('mongodb')">
+                🍃 MongoDB
+              </div>
+              <div class="source-tab" [class.active]="selectedSourceType() === 'mysql'" (click)="selectedSourceType.set('mysql')">
+                🐬 MySQL Workbench
+              </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 1rem;">
+              @if (selectedSourceType() === 'mongodb') {
+                <div class="form-group">
+                  <label class="form-label">MongoDB Connection URI</label>
+                  <input class="form-input" type="text" [ngModel]="mongoUri()" (ngModelChange)="mongoUri.set($event)">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Collection Name (Extract Source)</label>
+                  <input class="form-input" type="text" [(ngModel)]="ingestTableName">
+                </div>
+              } @else if (selectedSourceType() === 'mysql') {
+                <div style="display: grid; grid-template-columns: 1fr 100px; gap: 0.5rem;">
+                  <div class="form-group">
+                    <label class="form-label">MySQL Host</label>
+                    <input class="form-input" type="text" [ngModel]="mysqlHost()" (ngModelChange)="mysqlHost.set($event)">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Port</label>
+                    <input class="form-input" type="text" [ngModel]="mysqlPort()" (ngModelChange)="mysqlPort.set($event)">
+                  </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                  <div class="form-group">
+                    <label class="form-label">User</label>
+                    <input class="form-input" type="text" [ngModel]="mysqlUser()" (ngModelChange)="mysqlUser.set($event)">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input class="form-input" type="password" [ngModel]="mysqlPassword()" (ngModelChange)="mysqlPassword.set($event)">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Database Name</label>
+                  <input class="form-input" type="text" [ngModel]="mysqlDatabase()" (ngModelChange)="mysqlDatabase.set($event)">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Table Name (Extract Source)</label>
+                  <input class="form-input" type="text" [(ngModel)]="ingestTableName">
+                </div>
+              }
+
+              <div style="border-top: 1px solid var(--border-subtle); padding-top: 1rem; margin-top: 0.5rem;">
+                <div class="form-group">
+                  <label class="form-label">PostgreSQL Target Schema</label>
+                  <input class="form-input" type="text" [value]="projectName().toLowerCase() + '_bronze'" disabled style="opacity: 0.7;">
+                </div>
+              </div>
+            </div>
+
+            @if (ingesting()) {
+              <div>
+                <div class="inline-loading" style="font-size: 0.85rem;">
+                  <span class="spinner"></span> Processing database pipelines...
+                </div>
+                <div class="progress-bar-container">
+                  <div class="progress-bar-fill" [style.width.%]="ingestionProgress()"></div>
+                </div>
+              </div>
+            }
+
+            <button class="btn btn-primary" (click)="initIngestionScript()" [disabled]="ingesting()" style="align-self: flex-start; margin-top: 0.5rem;">
+              🚀 Initialize Ingestion Script
+            </button>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+            <div class="glass-panel" style="flex: 1; display: flex; flex-direction: column; gap: 1rem;">
+              <h3>Ingestion Output logs</h3>
+              <div class="console-container" style="flex: 1;">
+                @if (ingestionLogs().length === 0) {
+                  <div style="color: var(--text-muted)">Waiting to trigger pipeline initialization...</div>
+                }
+                @for (log of ingestionLogs(); track log) {
+                  <div class="console-line" [class.error]="log.includes('[ERROR]')" [class.success]="log.includes('[SUCCESS]')" [class.info]="log.includes('[INFO]')">
+                    {{ log }}
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- 2. NOTEBOOK IDE TAB -->
+      @if (currentTab() === 'notebook') {
+        <div class="notebook-container">
+          <!-- File Browser -->
+          <div class="file-browser">
+            <div class="browser-header" style="display: flex; justify-content: space-between; align-items: center;">
+              <span>Workspace Project</span>
+              <button class="btn btn-secondary" style="padding: 0.15rem 0.4rem; font-size: 0.7rem; font-weight: 500;" (click)="createNewFilePrompt()">
+                ➕ New File
+              </button>
+            </div>
+            @for (rootNode of fileTree(); track rootNode.name) {
+              <div>
+                <div class="tree-node" style="font-weight: 600;" (click)="selectFileNode('my_mage_project', rootNode)">
+                  📁 {{ rootNode.name }}
+                </div>
+                @if (rootNode.isOpen && rootNode.children) {
+                  <div class="tree-children">
+                    @for (child of rootNode.children; track child.name) {
+                      @if (child.children) {
+                        <div class="tree-node" style="font-weight: 500;" (click)="child.isOpen = !child.isOpen">
+                          📁 {{ child.name }}
+                        </div>
+                        @if (child.isOpen) {
+                          <div class="tree-children">
+                            @for (subchild of child.children; track subchild.name) {
+                              <div class="tree-node" [class.selected]="selectedFilePath() === 'my_mage_project/' + child.name + '/' + subchild.name" (click)="selectFileNode('my_mage_project/' + child.name + '/' + subchild.name, subchild)">
+                                📄 {{ subchild.name }}
+                              </div>
+                            }
+                          </div>
+                        }
+                      } @else {
+                        <div class="tree-node" [class.selected]="selectedFilePath() === 'my_mage_project/' + child.name" (click)="selectFileNode('my_mage_project/' + child.name, child)">
+                          📄 {{ child.name }}
+                        </div>
+                      }
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </div>
+
+          <!-- Editor Split -->
+          <div class="editor-terminal-split">
+            <!-- Monaco Editor Area -->
+            <div class="editor-area">
+              <div class="editor-toolbar">
+                <div class="form-group" style="flex-direction: row; align-items: center; gap: 0.5rem;">
+                  <span class="form-label">Language:</span>
+                  <select class="form-select" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;" [value]="editorLanguage()" (change)="changeLanguage(l.value)" #l>
+                    <option value="python">Python</option>
+                    <option value="pyspark">PySpark</option>
+                    <option value="sql">SQL</option>
+                    <option value="r">R</option>
+                  </select>
+                </div>
+                
+                <span style="font-size: 0.8rem; color: var(--text-muted)">
+                  File: <strong style="color: var(--text-secondary)">{{ selectedFilePath() || 'scratchpad.py' }}</strong>
+                </span>
+
+                <button class="btn btn-secondary" style="margin-inline-start: auto; padding: 0.35rem 0.75rem; font-size: 0.8rem;" (click)="saveFile()">
+                  💾 Save Code
+                </button>
+                <button class="btn btn-primary" style="padding: 0.35rem 1rem; font-size: 0.8rem;" (click)="runCode()" [disabled]="executing()">
+                  @if (executing()) { <span class="spinner"></span> Running... }
+                  @else { ▶ Run Code }
+                </button>
+              </div>
+
+              <!-- Monaco Wrapper Component -->
+              <div class="monaco-wrapper">
+                <ngx-monaco-editor [options]="editorOptions()" [ngModel]="editorCode()" (ngModelChange)="editorCode.set($event)"></ngx-monaco-editor>
+              </div>
+            </div>
+
+            <!-- Terminal Output Area -->
+            <div class="terminal-area">
+              <div class="terminal-header">
+                <div class="terminal-tabs">
+                  <button class="terminal-tab" [class.active]="activeTerminalTab() === 'terminal'" (click)="activeTerminalTab.set('terminal')">
+                    📟 Terminal Output
+                  </button>
+                  <button class="terminal-tab" [class.active]="activeTerminalTab() === 'preview'" (click)="activeTerminalTab.set('preview')">
+                    📊 Data Grid Preview
+                  </button>
+                  <button class="terminal-tab" [class.active]="activeTerminalTab() === 'output'" (click)="activeTerminalTab.set('output')">
+                    🗄️ Database Tables
+                  </button>
+                </div>
+                <div style="padding: 0 1rem; display: flex; align-items: center; font-size: 0.75rem; color: var(--text-muted);">
+                  @if (activeTerminalTab() === 'terminal') { <span>Console logs ready</span> }
+                  @if (activeTerminalTab() === 'preview') { <span>SQL table previews (top 10 rows)</span> }
+                  @if (activeTerminalTab() === 'output') { <span>PostgreSQL schemas discovery</span> }
+                </div>
+              </div>
+              
+              <div class="terminal-body">
+                <!-- 1. TERMINAL LOGS TAB -->
+                @if (activeTerminalTab() === 'terminal') {
+                  <div style="white-space: pre-wrap; font-family: monospace;">{{ terminalLogs() }}</div>
+                }
+
+                <!-- 2. DATA GRID PREVIEW TAB -->
+                @if (activeTerminalTab() === 'preview') {
+                  @if (sqlResults() && sqlResults().length > 0) {
+                    <div class="data-grid-wrapper">
+                      <table class="data-table">
+                        <thead>
+                          <tr>
+                            @for (col of getDynamicColumns(); track col) {
+                              <th>{{ col }}</th>
+                            }
+                          </tr>
+                        </thead>
+                        <tbody>
+                          @for (row of sqlResults(); track row) {
+                            <tr>
+                              @for (col of getDynamicColumns(); track col) {
+                                <td>{{ row[col] }}</td>
+                              }
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    </div>
+                  } @else {
+                    <div style="color: var(--text-muted); text-align: center; padding: 2rem;">No data preview available. Execute a query to populate.</div>
+                  }
+                }
+
+                <!-- 3. POSTGRESQL TABLES SCHEMA TAB -->
+                @if (activeTerminalTab() === 'output') {
+                  <div style="display: flex; flex-direction: column; gap: 1.5rem; font-family: sans-serif;">
+                    @for (schemaGroup of ['bronze', 'silver', 'gold']; track schemaGroup) {
+                      <div class="schema-group">
+                        <div class="schema-title">
+                          {{ projectName().toLowerCase() + '_' + schemaGroup }} schema
+                        </div>
+                        
+                        <div class="schema-grid">
+                          @let filteredTables = getTablesInSchema(schemaGroup);
+                          @if (filteredTables.length > 0) {
+                            @for (table of filteredTables; track table.tableName) {
+                              <div class="schema-table-card">
+                                <div style="display: flex; flex-direction: column; gap: 0.15rem; cursor: pointer;" (click)="openFileForTable(table.schemaName, table.tableName)" title="Open source code file in editor">
+                                  <span style="color: var(--accent-green-light); font-weight: 600; font-size: 0.8rem; text-decoration: underline;">{{ table.tableName }}</span>
+                                  <span style="color: var(--text-muted); font-size: 0.7rem;">{{ table.schemaName }}.{{ table.tableName }}</span>
+                                </div>
+                                <button class="btn btn-secondary" style="padding: 0.2rem 0.4rem; font-size: 0.7rem;" (click)="previewDbTable(table.schemaName, table.tableName)">
+                                  🔍 Preview
+                                </button>
+                              </div>
+                            }
+                          } @else {
+                            <div style="color: var(--text-muted); font-size: 0.75rem;">No tables found. Initialize project schema or run ingestion code.</div>
+                          }
+                        </div>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- 3. PIPELINE LINEAGE TAB -->
+      @if (currentTab() === 'pipelines') {
+        <div class="pipelines-container">
+          <div class="pipeline-list-panel">
+            <h3>Pipelines List</h3>
+            <div style="display: flex; flex-direction: column; gap: 0.5rem; overflow-y: auto; flex: 1;">
+              @for (pipe of pipelines(); track pipe.uuid) {
+                <div class="pipeline-card" [class.selected]="selectedPipeline()?.uuid === pipe.uuid" (click)="selectPipeline(pipe)">
+                  <div class="pipeline-card-title">{{ pipe.name }}</div>
+                  <div class="pipeline-card-meta">Blocks: {{ pipe.blocks?.length || 0 }} | Type: {{ pipe.type }}</div>
+                </div>
+              }
+              @if (pipelines().length === 0) {
+                <div style="color: var(--text-muted); font-size: 0.8rem; padding: 1rem; text-align: center;">No active Mage pipelines found.</div>
+              }
+            </div>
+          </div>
+
+          <!-- DAG Viewer and Run Area -->
+          <div class="dag-viewer-panel">
+            <div class="editor-toolbar" style="background-color: #0d121f;">
+              <h3>Pipeline DAG: <span style="color: var(--accent-green-light)">{{ selectedPipeline()?.name || 'No pipeline selected' }}</span></h3>
+              <button class="btn btn-primary" style="margin-inline-start: auto; padding: 0.35rem 1rem; font-size: 0.8rem;" (click)="runPipeline()" [disabled]="pipelineRunning() || !selectedPipeline()">
+                @if (pipelineRunning()) { <span class="spinner"></span> Running DAG... }
+                @else { ⚡ Execute Pipeline }
+              </button>
+            </div>
+
+            <!-- Lineage Columns -->
+            <div class="dag-canvas-lineage">
+              <!-- Ingestion/Bronze -->
+              <div class="dag-column">
+                <div class="column-header">Bronze Layer</div>
+                <div class="dag-column-nodes">
+                  @for (block of getBlocksForSchema('bronze'); track block.uuid) {
+                    <div class="dag-node-lineage" (click)="onDagNodeClick(block)" [title]="'Click to edit ' + block.filePath">
+                      {{ getNodeDisplayName(block) }}
+                    </div>
+                  }
+                  @if (getBlocksForSchema('bronze').length === 0) {
+                    <div style="color: var(--text-muted); font-size: 0.75rem;">No data loader blocks.</div>
+                  }
+                </div>
+              </div>
+
+              <div class="column-arrow-connector">➔</div>
+
+              <!-- Silver -->
+              <div class="dag-column">
+                <div class="column-header">Silver Layer</div>
+                <div class="dag-column-nodes">
+                  @for (block of getBlocksForSchema('silver'); track block.uuid) {
+                    <div class="dag-node-lineage" (click)="onDagNodeClick(block)" [title]="'Click to edit ' + block.filePath">
+                      {{ getNodeDisplayName(block) }}
+                    </div>
+                  }
+                  @if (getBlocksForSchema('silver').length === 0) {
+                    <div style="color: var(--text-muted); font-size: 0.75rem;">No transformation blocks.</div>
+                  }
+                </div>
+              </div>
+
+              <div class="column-arrow-connector">➔</div>
+
+              <!-- Gold -->
+              <div class="dag-column">
+                <div class="column-header">Gold Layer</div>
+                <div class="dag-column-nodes">
+                  @for (block of getBlocksForSchema('gold'); track block.uuid) {
+                    <div class="dag-node-lineage" (click)="onDagNodeClick(block)" [title]="'Click to edit ' + block.filePath">
+                      {{ getNodeDisplayName(block) }}
+                    </div>
+                  }
+                  @if (getBlocksForSchema('gold').length === 0) {
+                    <div style="color: var(--text-muted); font-size: 0.75rem;">No aggregator blocks.</div>
+                  }
+                </div>
+              </div>
+            </div>
+
+            <!-- Execution Logs -->
+            <div class="terminal-area" style="block-size: 160px; border-inline: 0; border-block-end: 0;">
+              <div class="terminal-header">
+                <span>PIPELINE EXECUTION LOGS</span>
+              </div>
+              <div class="terminal-body" style="font-size: 0.75rem; line-height: 1.4;">
+                {{ pipelineLogs() }}
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- 4. SUPERSET EMBED DASHBOARD TAB -->
+      @if (currentTab() === 'visualizer') {
+        <div class="visualizer-container">
+          <div class="superset-config-banner">
+            <div class="superset-badge">
+              <span class="superset-badge-icon">S</span>
+              <span>Apache Superset Embedded Web View</span>
+            </div>
+            <div class="superset-input-row">
+              <label for="superset-url">Dashboard Embed URL:</label>
+              <input id="superset-url" class="form-input superset-url-input" type="text" [ngModel]="supersetUrl()" (ngModelChange)="supersetUrl.set($event)" placeholder="e.g. http://localhost:8088/superset/dashboard/1/?standalone=true">
+            </div>
+          </div>
+
+          @if (supersetUrl()) {
+            <div class="glass-panel" style="padding: 0; overflow: hidden; border-radius: 0;">
+              <iframe [src]="getSafeSupersetUrl()" width="100%" height="700px" style="border: none; background: white;"></iframe>
+            </div>
+          } @else {
+            <!-- Premium Fallback Dashboard -->
+            <div class="superset-dashboard-mockup">
+              <div class="superset-filters-panel">
+                <div class="filters-header">
+                  <span class="filters-header-title">🎛️ Project Database Indicators</span>
+                  <span style="font-size: 0.75rem; color: var(--text-secondary);">Currently displaying fallbacks analytics metrics</span>
+                </div>
+              </div>
+
+              <!-- Metric Cards -->
+              <div class="metrics-row">
+                <div class="glass-panel metric-card">
+                  <div class="metric-label">Ingested Bronze Records</div>
+                  <div class="metric-val blue">{{ filteredMetrics().total_items }}</div>
+                </div>
+                <div class="glass-panel metric-card">
+                  <div class="metric-label">Silver Staging Alerts</div>
+                  <div class="metric-val teal">{{ filteredMetrics().low_stock }}</div>
+                </div>
+                <div class="glass-panel metric-card">
+                  <div class="metric-label">Gold Aggregates Triggers</div>
+                  <div class="metric-val purple">{{ filteredMetrics().out_of_stock }}</div>
+                </div>
+                <div class="glass-panel metric-card">
+                  <div class="metric-label">Total Pipeline Processes</div>
+                  <div class="metric-val pink">{{ filteredMetrics().total_orders }}</div>
+                </div>
+              </div>
+
+              <!-- Charts -->
+              <div class="charts-row">
+                <div class="glass-panel chart-card">
+                  <div class="chart-title">Current Ingested Inventory Valuation ($)</div>
+                  <svg class="svg-chart" viewBox="0 0 500 150">
+                    <line class="grid-line" x1="40" y1="20" x2="480" y2="20"></line>
+                    <line class="grid-line" x1="40" y1="70" x2="480" y2="70"></line>
+                    <line class="grid-line" x1="40" y1="120" x2="480" y2="120"></line>
+                    <line class="axis-line" x1="40" y1="130" x2="480" y2="130"></line>
+                    
+                    @for (item of filteredChartCategories(); track item.category; let idx = $index) {
+                      @let height = (item.value / 150000) * 100;
+                      @let y = 130 - height;
+                      <rect class="bar-rect" [attr.x]="60 + idx * 80" [attr.y]="y" width="30" [attr.height]="height" style="fill: var(--accent-green);"></rect>
+                      <text class="axis-text" [attr.x]="75 + idx * 80" y="145" text-anchor="middle">{{ item.category }}</text>
+                    }
+                  </svg>
+                </div>
+
+                <div class="glass-panel chart-card">
+                  <div class="chart-title">Sales Category Revenue Value ($)</div>
+                  <svg class="svg-chart" viewBox="0 0 500 150">
+                    <line class="grid-line" x1="40" y1="20" x2="480" y2="20"></line>
+                    <line class="grid-line" x1="40" y1="70" x2="480" y2="70"></line>
+                    <line class="grid-line" x1="40" y1="120" x2="480" y2="120"></line>
+                    <line class="axis-line" x1="40" y1="130" x2="480" y2="130"></line>
+
+                    @for (item of filteredChartSales(); track item.label; let idx = $index) {
+                      @let height = (item.value / 100000) * 100;
+                      @let y = 130 - height;
+                      <rect class="bar-rect" [attr.x]="60 + idx * 80" [attr.y]="y" width="30" [attr.height]="height" style="fill: var(--accent-cyan);"></rect>
+                      <text class="axis-text" [attr.x]="75 + idx * 80" y="145" text-anchor="middle">{{ item.label }}</text>
+                    }
+                  </svg>
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  </main>
+</div>
+
+<!-- Settings Modal Overlay -->
+@if (settingsModalOpen()) {
+  <div class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 style="font-weight: 700; color: var(--text-primary);">⚙️ Mage Project UI Settings</h3>
+        <button class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.8rem;" (click)="settingsModalOpen.set(false)">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Project Name</label>
+          <input class="form-input" type="text" [ngModel]="projectName()" (ngModelChange)="projectName.set($event)">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Local Workspace Project Path</label>
+          <input class="form-input" type="text" [ngModel]="workspacePath()" (ngModelChange)="workspacePath.set($event)">
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="form-group">
+            <label class="form-label">Execution Mode</label>
+            <select class="form-select" [ngModel]="executionMode()" (ngModelChange)="executionMode.set($event)">
+              <option value="docker">Docker Container</option>
+              <option value="local">Local System</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Docker Container Name</label>
+            <input class="form-input" type="text" [ngModel]="dockerContainerName()" (ngModelChange)="dockerContainerName.set($event)" [disabled]="executionMode() !== 'docker'">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">PostgreSQL Target Connection URI</label>
+          <input class="form-input" type="text" [ngModel]="postgresUri()" (ngModelChange)="postgresUri.set($event)">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">MongoDB Connection URI</label>
+          <input class="form-input" type="text" [ngModel]="mongoUri()" (ngModelChange)="mongoUri.set($event)">
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+          <div class="form-group">
+            <label class="form-label">Mage Server API URL</label>
+            <input class="form-input" type="text" [ngModel]="mageUrl()" (ngModelChange)="mageUrl.set($event)">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Mage API Key</label>
+            <input class="form-input" type="password" [ngModel]="mageApiKey()" (ngModelChange)="mageApiKey.set($event)">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="settingsModalOpen.set(false)">Cancel</button>
+        <button class="btn btn-primary" (click)="saveSettings()">Save Configuration</button>
+      </div>
+    </div>
+  </div>
+}

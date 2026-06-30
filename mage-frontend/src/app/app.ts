@@ -1,0 +1,595 @@
+import { Component, OnInit, signal, inject, computed } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { DecimalPipe, SlicePipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { EditorComponent } from 'ngx-monaco-editor-v2';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
+
+interface FileNode {
+  name: string;
+  type: 'file' | 'directory';
+  language?: string;
+  children?: FileNode[];
+  isOpen?: boolean;
+}
+
+@Component({
+  selector: 'app-root',
+  standalone: true,
+  imports: [FormsModule, EditorComponent, DecimalPipe, SlicePipe],
+  templateUrl: './app.html',
+  styleUrl: './app.css'
+})
+export class App implements OnInit {
+  private readonly http = inject(HttpClient);
+  private readonly sanitizer = inject(DomSanitizer);
+  private readonly gatewayUrl = 'http://localhost:5000/api';
+
+  // Navigation & Modal state
+  readonly currentTab = signal<string>('ingest');
+  readonly settingsModalOpen = signal<boolean>(false);
+
+  // Configuration settings signals
+  readonly projectName = signal<string>('my_project');
+  readonly workspacePath = signal<string>('');
+  readonly executionMode = signal<string>('docker');
+  readonly dockerContainerName = signal<string>('cranky_faraday');
+  readonly postgresUri = signal<string>('');
+  readonly mongoUri = signal<string>('');
+  readonly mysqlHost = signal<string>('localhost');
+  readonly mysqlPort = signal<string>('3306');
+  readonly mysqlUser = signal<string>('root');
+  readonly mysqlPassword = signal<string>('password');
+  readonly mysqlDatabase = signal<string>('mysqldb');
+  readonly mageUrl = signal<string>('');
+  readonly mageApiKey = signal<string>('');
+  readonly supersetUrl = signal<string>('');
+
+  // Ingestion views parameters
+  readonly selectedSourceType = signal<string>('mongodb');
+  readonly ingestTableName = signal<string>('users');
+  readonly ingesting = signal<boolean>(false);
+  readonly ingestionProgress = signal<number>(0);
+  readonly ingestionLogs = signal<string[]>([]);
+
+  // Notebook editor signals
+  readonly fileTree = signal<FileNode[]>([]);
+  readonly selectedFilePath = signal<string>('');
+  readonly editorCode = signal<string>('# Select a file to edit, or write code here...');
+  readonly editorLanguage = signal<string>('python');
+  readonly executing = signal<boolean>(false);
+  readonly terminalLogs = signal<string>('Terminal ready. Click "Run Code" or press Ctrl+Enter to execute.');
+  readonly sqlResults = signal<any[]>([]);
+  readonly activeTerminalTab = signal<string>('terminal');
+  readonly dbTables = signal<any[]>([]);
+
+  // Monaco Editor Options
+  readonly editorOptions = signal<any>({
+    theme: 'vs',
+    language: 'python',
+    automaticLayout: true,
+    fontSize: 14,
+    lineNumbers: 'on',
+    minimap: { enabled: false },
+    fontFamily: "'Fira Code', 'Courier New', monospace"
+  });
+
+  // Pipelines Lineage signals
+  readonly pipelines = signal<any[]>([]);
+  readonly selectedPipeline = signal<any>(null);
+  readonly pipelineRunning = signal<boolean>(false);
+  readonly pipelineLogs = signal<string>('');
+  newPipelineName = '';
+
+  // Mock fallbacks visualizer metrics (used when DB table list is empty)
+  readonly mockMetrics = signal<any>({ total_items: 2489, low_stock: 3, out_of_stock: 1, total_orders: 142, total_users: 75 });
+  readonly mockChartCategories = signal<any[]>([
+    { category: 'Mobile', value: 125000 },
+    { category: 'Accessories', value: 45000 },
+    { category: 'Electronics', value: 30000 },
+    { category: 'Home', value: 15000 },
+    { category: 'Laptops', value: 0 }
+  ]);
+  readonly mockChartSales = signal<any[]>([
+    { label: 'Mobile', value: 75000 },
+    { label: 'Laptops', value: 50000 },
+    { label: 'Home', value: 12000 },
+    { label: 'Accessories', value: 5000 }
+  ]);
+  readonly mockGridPreviewData = signal<any[]>([
+    { product_id: 'p1', product_name: 'iPhone 15 Pro', category: 'Mobile', current_stock: 45, reorder_level: 10, stock_status: 'HEALTHY', pending_restock_quantity: 0 },
+    { product_id: 'p2', product_name: 'USB-C Cable 1m', category: 'Accessories', current_stock: 4, reorder_level: 20, stock_status: 'LOW STOCK', pending_restock_quantity: 50 },
+    { product_id: 'p3', product_name: 'Dell XPS 13', category: 'Laptops', current_stock: 0, reorder_level: 5, stock_status: 'OUT OF STOCK', pending_restock_quantity: 20 }
+  ]);
+
+  // Analytical variables & calculations
+  readonly filteredGridData = computed(() => {
+    return this.mockGridPreviewData();
+  });
+
+  readonly filteredMetrics = computed(() => {
+    return this.mockMetrics();
+  });
+
+  readonly filteredChartCategories = computed(() => {
+    return this.mockChartCategories();
+  });
+
+  readonly filteredChartSales = computed(() => {
+    return this.mockChartSales();
+  });
+
+  ngOnInit() {
+    this.loadConfiguration();
+  }
+
+  // Load backend configurations
+  loadConfiguration() {
+    this.http.get<any>(`${this.gatewayUrl}/config`).subscribe({
+      next: (config) => {
+        if (config) {
+          this.projectName.set(config.projectName || 'my_project');
+          this.workspacePath.set(config.workspacePath || '');
+          this.executionMode.set(config.executionMode || 'docker');
+          this.dockerContainerName.set(config.dockerContainerName || 'cranky_faraday');
+          this.postgresUri.set(config.postgresUri || '');
+          this.mongoUri.set(config.mongoUri || '');
+          this.mysqlHost.set(config.mysqlHost || 'localhost');
+          this.mysqlPort.set(config.mysqlPort || '3306');
+          this.mysqlUser.set(config.mysqlUser || 'root');
+          this.mysqlPassword.set(config.mysqlPassword || 'password');
+          this.mysqlDatabase.set(config.mysqlDatabase || 'mysqldb');
+          this.mageUrl.set(config.mageUrl || '');
+          this.mageApiKey.set(config.mageApiKey || '');
+          this.supersetUrl.set(config.supersetUrl || '');
+          
+          // Once config is loaded, call secondary workspace queries
+          this.loadWorkspaceFiles();
+          this.loadDbTables();
+          this.loadPipelines();
+        }
+      },
+      error: (err) => {
+        console.error('Failed to load configs. Operating in simulated offline mode.', err);
+        this.loadWorkspaceFiles();
+      }
+    });
+  }
+
+  // Save config settings
+  saveSettings() {
+    const payload = {
+      projectName: this.projectName(),
+      workspacePath: this.workspacePath(),
+      executionMode: this.executionMode(),
+      dockerContainerName: this.dockerContainerName(),
+      postgresUri: this.postgresUri(),
+      mongoUri: this.mongoUri(),
+      mysqlHost: this.mysqlHost(),
+      mysqlPort: this.mysqlPort(),
+      mysqlUser: this.mysqlUser(),
+      mysqlPassword: this.mysqlPassword(),
+      mysqlDatabase: this.mysqlDatabase(),
+      mageUrl: this.mageUrl(),
+      mageApiKey: this.mageApiKey(),
+      supersetUrl: this.supersetUrl()
+    };
+
+    this.http.post<any>(`${this.gatewayUrl}/config`, payload).subscribe({
+      next: (res) => {
+        this.settingsModalOpen.set(false);
+        this.loadWorkspaceFiles();
+        this.loadDbTables();
+        this.loadPipelines();
+        alert('Configuration saved successfully!');
+      },
+      error: (err) => {
+        alert('Save settings failed: ' + err.message);
+      }
+    });
+  }
+
+  setTab(tab: string) {
+    this.currentTab.set(tab);
+  }
+
+  getSafeSupersetUrl(): SafeResourceUrl {
+    const url = this.supersetUrl();
+    if (!url) return '';
+    return this.sanitizer.bypassSecurityTrustResourceUrl(url);
+  }
+
+  // ==========================================
+  // INGESTION METHODS
+  // ==========================================
+
+  initializeProjectSchema() {
+    const name = prompt("Enter project name to initialize (e.g. ecom_store):", this.projectName());
+    if (!name) return;
+
+    this.http.post<any>(`${this.gatewayUrl}/project/initialize`, { ProjectName: name }).subscribe({
+      next: (res) => {
+        this.projectName.set(name);
+        alert(res.message);
+        this.loadDbTables();
+      },
+      error: (err) => {
+        alert('Initialization failed: ' + err.message);
+      }
+    });
+  }
+
+  initIngestionScript() {
+    const table = this.ingestTableName().trim();
+    if (!table) {
+      alert("Please enter a collection or table name to ingest.");
+      return;
+    }
+
+    const payload = {
+      SourceType: this.selectedSourceType(),
+      TableName: table
+    };
+
+    this.ingesting.set(true);
+    this.ingestionLogs.set(["[INFO] Generating Python ETL Ingestion code mapping for Medallion architecture..."]);
+
+    this.http.post<any>(`${this.gatewayUrl}/ingest/initialize`, payload).subscribe({
+      next: (res) => {
+        this.ingesting.set(false);
+        this.ingestionLogs.update(logs => [
+          ...logs,
+          `[SUCCESS] Python script initialized successfully: ${res.filename}`,
+          `[INFO] Directing to Notebook tab. Click 'Run Code' inside Monaco to start loading data.`
+        ]);
+        
+        // Reload files tree and auto open this generated script
+        this.loadWorkspaceFiles();
+        this.setTab('notebook');
+        setTimeout(() => {
+          this.openFileByPath(`my_mage_project/${res.filename}`);
+        }, 300);
+      },
+      error: (err) => {
+        this.ingesting.set(false);
+        this.ingestionLogs.update(logs => [...logs, `[ERROR] Script generation failed: ${err.message}`]);
+      }
+    });
+  }
+
+  // ==========================================
+  // FILE BROWSER & MONACO notebook logic
+  // ==========================================
+
+  loadWorkspaceFiles() {
+    this.http.get<any>(`${this.gatewayUrl}/workspace/files`).subscribe({
+      next: (data) => {
+        let list: FileNode[] = [];
+        if (data && data.files && Array.isArray(data.files)) {
+          list = data.files;
+        } else if (Array.isArray(data)) {
+          list = data;
+        }
+        this.fileTree.set(list);
+      },
+      error: () => {
+        // Simulated file tree structure fallback
+        this.fileTree.set([
+          {
+            name: 'my_mage_project',
+            type: 'directory',
+            isOpen: true,
+            children: [
+              { name: 'ingest_mongodb_users.py', type: 'file', language: 'python' },
+              { name: 'run_medallion_pipeline.py', type: 'file', language: 'python' },
+              {
+                name: 'bronze',
+                type: 'directory',
+                isOpen: true,
+                children: [
+                  { name: 'postgres_init.sql', type: 'file', language: 'sql' },
+                  { name: 'users.sql', type: 'file', language: 'sql' }
+                ]
+              },
+              {
+                name: 'silver',
+                type: 'directory',
+                isOpen: true,
+                children: [
+                  { name: 'stg_users.sql', type: 'file', language: 'sql' }
+                ]
+              },
+              {
+                name: 'gold',
+                type: 'directory',
+                isOpen: true,
+                children: [
+                  { name: 'sales_aggregations.sql', type: 'file', language: 'sql' }
+                ]
+              }
+            ]
+          }
+        ]);
+      }
+    });
+  }
+
+  selectFileNode(path: string, node: FileNode) {
+    if (node.type === 'directory') {
+      node.isOpen = !node.isOpen;
+      return;
+    }
+
+    this.selectedFilePath.set(path);
+    this.editorLanguage.set(node.language || 'python');
+    this.editorOptions.set({
+      ...this.editorOptions(),
+      language: node.language === 'pyspark' ? 'python' : node.language
+    });
+
+    this.http.get<any>(`${this.gatewayUrl}/workspace/file?filename=${path}`).subscribe({
+      next: (res) => {
+        this.editorCode.set(res.content);
+        this.terminalLogs.set(`Loaded file: ${node.name}. Click 'Run Code' or press Ctrl+Enter to compile.`);
+        this.sqlResults.set([]);
+      },
+      error: () => {
+        this.editorCode.set('# Sample python script\nprint("Write code here...")');
+        this.terminalLogs.set(`Template loaded for ${node.name}. Ready to execute.`);
+      }
+    });
+  }
+
+  changeLanguage(lang: string) {
+    this.editorLanguage.set(lang);
+    this.editorOptions.set({
+      ...this.editorOptions(),
+      language: lang === 'pyspark' ? 'python' : lang
+    });
+  }
+
+  saveFile() {
+    if (!this.selectedFilePath()) {
+      alert('Please select a file to save first.');
+      return;
+    }
+
+    const payload = {
+      filename: this.selectedFilePath(),
+      code: this.editorCode()
+    };
+
+    this.http.post<any>(`${this.gatewayUrl}/workspace/file`, payload).subscribe({
+      next: (res) => {
+        this.terminalLogs.update(logs => `${logs}\n[INFO] File saved successfully.`);
+        this.loadPipelines(); // Reload DAG on save in case dependencies or block filenames changed!
+      },
+      error: (err) => {
+        alert('Save failed: ' + err.message);
+      }
+    });
+  }
+
+  createNewFilePrompt() {
+    const filename = prompt("Enter new filename relative to workspace (e.g. bronze/orders.sql, silver/stg_orders.sql, gold/sales_by_time_metrics.sql):");
+    if (!filename) return;
+
+    let starterCode = "";
+    if (filename.endsWith(".py")) {
+      starterCode = "# Python Medallion Block\ndef run_step():\n    print(\"Running step...\")\n";
+    } else if (filename.endsWith(".sql")) {
+      starterCode = "-- SQL Medallion Block\nSELECT * FROM source_table;\n";
+    } else {
+      starterCode = "";
+    }
+
+    const payload = {
+      filename: "my_mage_project/" + filename,
+      code: starterCode
+    };
+
+    this.http.post<any>(`${this.gatewayUrl}/workspace/file`, payload).subscribe({
+      next: () => {
+        this.loadWorkspaceFiles();
+        this.loadPipelines(); // Dynamically updates the DAG lineage chart!
+        this.openFileByPath("my_mage_project/" + filename);
+        this.terminalLogs.set(`[INFO] Created new file: ${filename}`);
+      },
+      error: (err) => {
+        alert("Error creating file: " + err.message);
+      }
+    });
+  }
+
+  runCode() {
+    if (this.executing()) return;
+
+    this.executing.set(true);
+    this.terminalLogs.set('[INFO] Executing script code runtime sequence...\n[INFO] Initializing environment bindings...');
+
+    const payload = {
+      fileName: this.selectedFilePath() || 'scratchpad.py',
+      code: this.editorCode(),
+      language: this.editorLanguage()
+    };
+
+    this.http.post<any>(`${this.gatewayUrl}/workspace/execute`, payload).subscribe({
+      next: (res) => {
+        this.executing.set(false);
+        this.terminalLogs.set(res.message);
+        if (res.data) {
+          this.sqlResults.set(res.data);
+          this.activeTerminalTab.set('preview');
+        } else {
+          this.sqlResults.set([]);
+        }
+        this.loadDbTables();
+      },
+      error: (err) => {
+        this.executing.set(false);
+        this.terminalLogs.set(`[ERROR] Code execution failed: ${err.message || 'Connection lost'}`);
+        this.sqlResults.set([]);
+      }
+    });
+  }
+
+  // ==========================================
+  // SCHEMA DISCOVERY & preview grid
+  // ==========================================
+
+  loadDbTables() {
+    this.http.get<any[]>(`${this.gatewayUrl}/workspace/postgres-tables`).subscribe({
+      next: (data) => {
+        this.dbTables.set(data || []);
+      },
+      error: () => {
+        console.error('Failed to load database table list.');
+      }
+    });
+  }
+
+  getTablesInSchema(schema: string): any[] {
+    const proj = this.projectName().toLowerCase().replace(/\s+/g, '_');
+    return this.dbTables().filter(t => t.schemaName === `${proj}_${schema}` || t.schemaName === schema);
+  }
+
+  getDynamicColumns(): string[] {
+    const results = this.sqlResults();
+    if (results && results.length > 0) {
+      return Object.keys(results[0]);
+    }
+    return [];
+  }
+
+  previewDbTable(schema: string, table: string) {
+    this.activeTerminalTab.set('preview');
+    this.terminalLogs.set(`[INFO] Fetching top 10 preview rows from database table ${schema}.${table}...`);
+    
+    this.http.post<any[]>(`${this.gatewayUrl}/workspace/preview`, { SchemaName: schema, TableName: table }).subscribe({
+      next: (res) => {
+        if (res && res.length > 0) {
+          this.sqlResults.set(res);
+          this.terminalLogs.set(`Successfully loaded data preview for table: ${schema}.${table}`);
+        } else {
+          this.sqlResults.set([]);
+          this.terminalLogs.set(`Table ${schema}.${table} is empty or query returned no data.`);
+        }
+      },
+      error: (err) => {
+        this.sqlResults.set([]);
+        this.terminalLogs.set(`Error loading table preview: ${err.message}`);
+      }
+    });
+  }
+
+  openFileForTable(schema: string, tableName: string) {
+    const proj = this.projectName().toLowerCase().replace(/\s+/g, '_');
+    let layerName = schema;
+    if (schema.startsWith(proj + "_")) {
+      layerName = schema.substring(proj.length + 1);
+    }
+    
+    let path = `my_mage_project/${layerName}/${tableName}.sql`;
+    this.openFileByPath(path);
+  }
+
+  openFileByPath(targetPath: string) {
+    const result = this.findFileNodeByPath(this.fileTree(), targetPath);
+    if (result) {
+      this.selectFileNode(result.fullPath, result.node);
+    } else {
+      // Direct load mapping if node structure is not built
+      const name = targetPath.split('/').pop() || 'scratchpad.py';
+      this.selectFileNode(targetPath, { name, type: 'file', language: name.endsWith('.sql') ? 'sql' : 'python' });
+    }
+  }
+
+  findFileNodeByPath(nodes: FileNode[], targetPath: string, parentPath = ''): { node: FileNode, fullPath: string } | null {
+    for (const node of nodes) {
+      const currentPath = parentPath ? `${parentPath}/${node.name}` : node.name;
+      if (node.type === 'file' && currentPath === targetPath) {
+        return { node, fullPath: currentPath };
+      }
+      if (node.type === 'directory' && node.children) {
+        const result = this.findFileNodeByPath(node.children, targetPath, currentPath);
+        if (result) {
+          node.isOpen = true;
+          return result;
+        }
+      }
+    }
+    return null;
+  }
+
+  // ==========================================
+  // PIPELINE LINEAGE DAG FLOW
+  // ==========================================
+
+  loadPipelines() {
+    this.http.get<any>(`${this.gatewayUrl}/pipelines`).subscribe({
+      next: (res) => {
+        this.pipelines.set(res.pipelines || []);
+        if (res.pipelines && res.pipelines.length > 0) {
+          this.selectedPipeline.set(res.pipelines[0]);
+        }
+      },
+      error: () => {
+        console.error('Failed to load pipelines list.');
+      }
+    });
+  }
+
+  selectPipeline(pipeline: any) {
+    this.selectedPipeline.set(pipeline);
+    this.pipelineLogs.set(`Selected pipeline: ${pipeline.name}.\nReady for DAG run execution.`);
+  }
+
+  runPipeline() {
+    const pipe = this.selectedPipeline();
+    if (!pipe) return;
+
+    this.pipelineRunning.set(true);
+    this.pipelineLogs.set(`[INFO] Dispatching scheduler job queue trigger for pipeline DAG: ${pipe.name}...\n[INFO] Allocating resources...`);
+
+    this.http.post<any>(`${this.gatewayUrl}/pipelines/${pipe.uuid}/run`, {}).subscribe({
+      next: (res) => {
+        this.pipelineRunning.set(false);
+        this.pipelineLogs.set(res.message || 'Pipeline execution completed successfully.');
+        this.loadDbTables();
+      },
+      error: (err) => {
+        this.pipelineRunning.set(false);
+        this.pipelineLogs.set(`[ERROR] Pipeline run failed: ${err.message}`);
+      }
+    });
+  }
+
+  getBlocksForSchema(layer: string): any[] {
+    const pipeline = this.selectedPipeline();
+    if (!pipeline || !pipeline.blocks) return [];
+    
+    if (layer === 'bronze') {
+      return pipeline.blocks.filter((b: any) => b.type === 'data_loader');
+    } else if (layer === 'silver') {
+      return pipeline.blocks.filter((b: any) => b.type === 'transformer');
+    } else if (layer === 'gold') {
+      return pipeline.blocks.filter((b: any) => b.type === 'data_exporter');
+    }
+    return [];
+  }
+
+  onDagNodeClick(block: any) {
+    if (!block) return;
+    const targetPath = block.filePath || block.uuid;
+    if (targetPath) {
+      this.setTab('notebook');
+      setTimeout(() => {
+        this.openFileByPath(targetPath);
+      }, 50);
+    }
+  }
+
+  getNodeDisplayName(block: any): string {
+    return block.name || block.uuid;
+  }
+}

@@ -125,7 +125,7 @@ export class App implements OnInit {
 
   // Load backend configurations
   loadConfiguration() {
-    this.http.get<any>(`${this.gatewayUrl}/config`).subscribe({
+    this.http.get<any>(`${this.gatewayUrl}/metadata`).subscribe({
       next: (config) => {
         if (config) {
           this.projectName.set(config.projectName || 'my_project');
@@ -175,7 +175,7 @@ export class App implements OnInit {
       supersetUrl: this.supersetUrl()
     };
 
-    this.http.post<any>(`${this.gatewayUrl}/config`, payload).subscribe({
+    this.http.post<any>(`${this.gatewayUrl}/metadata`, payload).subscribe({
       next: (res) => {
         this.settingsModalOpen.set(false);
         this.loadWorkspaceFiles();

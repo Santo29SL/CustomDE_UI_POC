@@ -1,10 +1,10 @@
 {
   "projectName": "my_project",
-  "workspacePath": "/Users/santhoshsl/Custom_GUI_Airflow/my_mage_project",
+  "workspacePath": "/Users/santhoshsl/custom-fabric-platform/my_mage_project",
   "executionMode": "docker",
   "dockerContainerName": "cranky_faraday",
-  "postgresUri": "postgresql://postgres:postgres@localhost:5432/slinventoryDB",
-  "mongoUri": "mongodb://localhost:27017/slinventoryDB",
+  "postgresUri": "postgresql://postgres:postgres@localhost:5432/expendsave",
+  "mongoUri": "mongodb://localhost:27017/expendsave",
   "mysqlHost": "localhost",
   "mysqlPort": "3306",
   "mysqlUser": "root",

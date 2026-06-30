@@ -10,7 +10,10 @@ var builder = WebApplication.CreateBuilder(args);
 // Enable CORS for Angular frontend
 builder.Services.AddCors(options => {
     options.AddPolicy("AllowAngular", policy => 
-        policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+        policy.SetIsOriginAllowed(origin => true)
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials());
 });
 builder.Services.AddHttpClient();
 
@@ -225,9 +228,9 @@ List<object> ScanFilesRecursive(string dirPath, string relativeBase)
 // CONFIGURATION ENDPOINTS
 // ==========================================
 
-app.MapGet("/api/config", () => Results.Json(GetConfig()));
+app.MapGet("/api/metadata", () => Results.Json(GetConfig()));
 
-app.MapPost("/api/config", ([FromBody] ConfigModel newConfig) => {
+app.MapPost("/api/metadata", ([FromBody] ConfigModel newConfig) => {
     SaveConfig(newConfig);
     return Results.Json(new { status = "success", config = newConfig });
 });

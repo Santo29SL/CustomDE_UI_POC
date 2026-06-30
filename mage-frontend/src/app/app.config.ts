@@ -10,6 +10,6 @@ export const appConfig: ApplicationConfig = {
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes),
     provideHttpClient(),
-    provideMonacoEditor()
+    provideMonacoEditor({ baseUrl: 'assets/monaco-editor/vs' })
   ]
 };

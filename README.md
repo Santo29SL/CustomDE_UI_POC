@@ -8,8 +8,33 @@ This repository integrates an automated data orchestration layer, a scalable .NE
 
 ## 🏗️ System Architecture
 
-+---------------------------------------+|       Angular 18 Management UI        ||          (fabric-frontend)            |+---------------------------------------+│▼ [HTTP REST / WebSockets]+---------------------------------------+|        .NET 8 Core API Gateway        ||            (FabricGateway)            |+---------------------------------------+│▼ [Subprocess / gRPC Triggers]+---------------------------------------+|        Mage AI Pipeline Engine        ||           (my_mage_project)           |+---------------------------------------+│┌─────────────────────┴─────────────────────┐▼                                           ▼[ dbt Core Models ]                         [ Infrastructure ]- Silver: stg_users, stg_orders             - AWS EMR Ingestion- Gold: customer_retention                  - SSH Tunneling Proxies
+```text
++---------------------------------------+
 
+|       Angular 18 Management UI        |
+|          (fabric-frontend)            |
++---------------------------------------+
+                    │
+                    ▼ [HTTP REST / WebSockets]
++---------------------------------------+
+
+|        .NET 8 Core API Gateway        |
+|            (FabricGateway)            |
++---------------------------------------+
+                    │
+                    ▼ [Subprocess / gRPC Triggers]
++---------------------------------------+
+
+|        Mage AI Pipeline Engine        |
+|           (my_mage_project)           |
++---------------------------------------+
+                    │
+      ┌─────────────┴─────────────┐
+      ▼                           ▼
+[ dbt Core Models ]       [ Infrastructure ]
+- Silver: stg_users       - AWS EMR Ingestion
+- Gold: customer_churn    - SSH Tunneling Proxies
+```
 
 The application separates concerns into three decoupled system domains:
 1. **Data Orchestration & Transformation (`my_mage_project`)**: Leverages **Mage AI** and **dbt (Data Build Tool)** to compile and execute batch ETL data models, moving streaming transaction footprints into validated business reporting metrics.

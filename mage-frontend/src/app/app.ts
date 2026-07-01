@@ -22,7 +22,7 @@ interface FileNode {
 export class App implements OnInit {
   private readonly http = inject(HttpClient);
   private readonly sanitizer = inject(DomSanitizer);
-  private readonly gatewayUrl = 'http://localhost:5000/api';
+  private readonly gatewayUrl = 'http://localhost:5050/api';
 
   // Navigation & Modal state
   readonly currentTab = signal<string>('ingest');

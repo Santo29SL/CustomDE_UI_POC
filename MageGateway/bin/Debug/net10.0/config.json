@@ -1,5 +1,5 @@
 {
-  "projectName": "my_project",
+  "projectName": "ExpendSave",
   "workspacePath": "../my_mage_project",
   "executionMode": "docker",
   "dockerContainerName": "cranky_faraday",

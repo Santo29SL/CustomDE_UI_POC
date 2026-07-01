@@ -808,8 +808,8 @@ All tables sync'd under {config.ProjectName.ToLower().Replace(" ", "_")} schemas
     });
 });
 
-// Run server on Port 5000
-app.Run("http://localhost:5000");
+// Run server on Port 5050
+app.Run("http://localhost:5050");
 
 // Models and Payloads
 public class ConfigModel

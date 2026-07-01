@@ -15,9 +15,9 @@ cleanup() {
   fi
   
   # Ensure ports are completely freed
-  PID_5000=$(lsof -t -i:5000)
-  if [ ! -z "$PID_5000" ]; then
-    kill -9 $PID_5000 2>/dev/null
+  PID_5050=$(lsof -t -i:5050)
+  if [ ! -z "$PID_5050" ]; then
+    kill -9 $PID_5050 2>/dev/null
   fi
   PID_4200=$(lsof -t -i:4200)
   if [ ! -z "$PID_4200" ]; then
@@ -29,7 +29,7 @@ cleanup() {
 
 trap cleanup SIGINT SIGTERM
 
-echo "🚀 Starting .NET Web API Gateway Backend (Port 5000)..."
+echo "🚀 Starting .NET Web API Gateway Backend (Port 5050)..."
 cd MageGateway
 dotnet run &
 BACKEND_PID=$!
@@ -42,7 +42,7 @@ FRONTEND_PID=$!
 cd ..
 
 echo "🎉 Services are starting up in the background!"
-echo "➡️ Gateway API: http://localhost:5000"
+echo "➡️ Gateway API: http://localhost:5050"
 echo "➡️ UI Dashboard: http://localhost:4200"
 echo "Press Ctrl+C to shut down all processes."
 

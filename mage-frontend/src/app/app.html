@@ -360,13 +360,25 @@
             </div>
 
             <!-- Lineage Columns -->
-            <div class="dag-canvas-lineage">
+            <div id="dag-canvas" class="dag-canvas-lineage" style="position: relative;">
+              <!-- Dynamic DAG SVG connections -->
+              <svg class="dag-svg" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1;">
+                <defs>
+                  <marker id="dag-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="var(--accent-green)" />
+                  </marker>
+                </defs>
+                @for (edge of dagEdges(); track edge.uuid) {
+                  <path [attr.d]="edge.path" fill="none" stroke="var(--accent-green)" stroke-width="2" marker-end="url(#dag-arrow)" style="opacity: 0.6; stroke-dasharray: 4; animation: dag-dash 30s linear infinite;" />
+                }
+              </svg>
+
               <!-- Ingestion/Bronze -->
-              <div class="dag-column">
+              <div class="dag-column" style="z-index: 2;">
                 <div class="column-header">Bronze Layer</div>
                 <div class="dag-column-nodes">
                   @for (block of getBlocksForSchema('bronze'); track block.uuid) {
-                    <div class="dag-node-lineage" (click)="onDagNodeClick(block)" [title]="'Click to edit ' + block.filePath">
+                    <div [id]="'node-' + block.uuid" class="dag-node-lineage" (click)="onDagNodeClick(block)" [title]="'Click to edit ' + block.filePath">
                       {{ getNodeDisplayName(block) }}
                     </div>
                   }
@@ -376,14 +388,14 @@
                 </div>
               </div>
 
-              <div class="column-arrow-connector">➔</div>
+              <div class="column-arrow-connector" style="z-index: 2;">➔</div>
 
               <!-- Silver -->
-              <div class="dag-column">
+              <div class="dag-column" style="z-index: 2;">
                 <div class="column-header">Silver Layer</div>
                 <div class="dag-column-nodes">
                   @for (block of getBlocksForSchema('silver'); track block.uuid) {
-                    <div class="dag-node-lineage" (click)="onDagNodeClick(block)" [title]="'Click to edit ' + block.filePath">
+                    <div [id]="'node-' + block.uuid" class="dag-node-lineage" (click)="onDagNodeClick(block)" [title]="'Click to edit ' + block.filePath">
                       {{ getNodeDisplayName(block) }}
                     </div>
                   }
@@ -393,14 +405,14 @@
                 </div>
               </div>
 
-              <div class="column-arrow-connector">➔</div>
+              <div class="column-arrow-connector" style="z-index: 2;">➔</div>
 
               <!-- Gold -->
-              <div class="dag-column">
+              <div class="dag-column" style="z-index: 2;">
                 <div class="column-header">Gold Layer</div>
                 <div class="dag-column-nodes">
                   @for (block of getBlocksForSchema('gold'); track block.uuid) {
-                    <div class="dag-node-lineage" (click)="onDagNodeClick(block)" [title]="'Click to edit ' + block.filePath">
+                    <div [id]="'node-' + block.uuid" class="dag-node-lineage" (click)="onDagNodeClick(block)" [title]="'Click to edit ' + block.filePath">
                       {{ getNodeDisplayName(block) }}
                     </div>
                   }

@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, signal, inject, computed } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal, inject, computed, HostListener } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { EditorComponent } from 'ngx-monaco-editor-v2';
@@ -229,6 +229,9 @@ export class App implements OnInit, OnDestroy {
 
   setTab(tab: string) {
     this.currentTab.set(tab);
+    if (tab === 'pipelines') {
+      this.updateDagConnections();
+    }
   }
 
   // ==========================================
@@ -573,12 +576,20 @@ export class App implements OnInit, OnDestroy {
   // PIPELINE LINEAGE DAG FLOW
   // ==========================================
 
+  readonly dagEdges = signal<any[]>([]);
+
+  @HostListener('window:resize')
+  onResize() {
+    this.updateDagConnections();
+  }
+
   loadPipelines() {
     this.http.get<any>(`${this.gatewayUrl}/pipelines`).subscribe({
       next: (res) => {
         this.pipelines.set(res.pipelines || []);
         if (res.pipelines && res.pipelines.length > 0) {
           this.selectedPipeline.set(res.pipelines[0]);
+          this.updateDagConnections();
         }
       },
       error: () => {
@@ -590,6 +601,57 @@ export class App implements OnInit, OnDestroy {
   selectPipeline(pipeline: any) {
     this.selectedPipeline.set(pipeline);
     this.pipelineLogs.set(`Selected pipeline: ${pipeline.name}.\nReady for DAG run execution.`);
+    this.updateDagConnections();
+  }
+
+  updateDagConnections() {
+    const pipeline = this.selectedPipeline();
+    if (!pipeline || !pipeline.blocks) {
+      this.dagEdges.set([]);
+      return;
+    }
+
+    // Wait a tiny bit for the DOM to render
+    setTimeout(() => {
+      const canvasEl = document.getElementById('dag-canvas');
+      if (!canvasEl) return;
+      const canvasRect = canvasEl.getBoundingClientRect();
+
+      const edges: any[] = [];
+
+      for (const block of pipeline.blocks) {
+        if (!block.upstream_blocks) continue;
+        
+        const targetNodeEl = document.getElementById(`node-${block.uuid}`);
+        if (!targetNodeEl) continue;
+        const targetRect = targetNodeEl.getBoundingClientRect();
+
+        for (const upstreamUuid of block.upstream_blocks) {
+          const sourceNodeEl = document.getElementById(`node-${upstreamUuid}`);
+          if (!sourceNodeEl) continue;
+          const sourceRect = sourceNodeEl.getBoundingClientRect();
+
+          // Calculate connection points:
+          // From the right-center of the source node, to the left-center of the target node
+          const x1 = sourceRect.right - canvasRect.left;
+          const y1 = sourceRect.top + sourceRect.height / 2 - canvasRect.top;
+          
+          const x2 = targetRect.left - canvasRect.left;
+          const y2 = targetRect.top + targetRect.height / 2 - canvasRect.top;
+
+          // Compute a nice cubic bezier curve path for the DAG line
+          const controlOffset = Math.max(40, (x2 - x1) / 2);
+          const path = `M ${x1} ${y1} C ${x1 + controlOffset} ${y1}, ${x2 - controlOffset} ${y2}, ${x2} ${y2}`;
+
+          edges.push({
+            path: path,
+            uuid: `${upstreamUuid}-${block.uuid}`
+          });
+        }
+      }
+
+      this.dagEdges.set(edges);
+    }, 150);
   }
 
   runPipeline() {

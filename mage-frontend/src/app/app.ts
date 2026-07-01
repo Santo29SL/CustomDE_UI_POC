@@ -1,4 +1,4 @@
-import { Component, OnInit, signal, inject, computed } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal, inject, computed } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { EditorComponent } from 'ngx-monaco-editor-v2';
@@ -19,7 +19,7 @@ interface FileNode {
   templateUrl: './app.html',
   styleUrl: './app.css'
 })
-export class App implements OnInit {
+export class App implements OnInit, OnDestroy {
   private readonly http = inject(HttpClient);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly gatewayUrl = 'http://localhost:5050/api';
@@ -78,6 +78,39 @@ export class App implements OnInit {
     minimap: { enabled: false },
     fontFamily: "'Fira Code', 'Courier New', monospace"
   });
+
+  // Resizing terminal height
+  readonly terminalHeight = signal<number>(180);
+  isResizing = false;
+  private startY = 0;
+  private startHeight = 0;
+
+  startResize(event: MouseEvent) {
+    event.preventDefault();
+    this.isResizing = true;
+    this.startY = event.clientY;
+    this.startHeight = this.terminalHeight();
+
+    window.addEventListener('mousemove', this.onMouseMove);
+    window.addEventListener('mouseup', this.stopResize);
+  }
+
+  onMouseMove = (event: MouseEvent) => {
+    if (!this.isResizing) return;
+    const deltaY = event.clientY - this.startY;
+    const newHeight = Math.max(100, Math.min(600, this.startHeight - deltaY));
+    this.terminalHeight.set(newHeight);
+  };
+
+  stopResize = () => {
+    this.isResizing = false;
+    window.removeEventListener('mousemove', this.onMouseMove);
+    window.removeEventListener('mouseup', this.stopResize);
+  };
+
+  ngOnDestroy() {
+    this.stopResize();
+  }
 
   // Pipelines Lineage signals
   readonly pipelines = signal<any[]>([]);

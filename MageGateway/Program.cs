@@ -545,7 +545,7 @@ app.MapGet("/api/workspace/postgres-tables", async () => {
 
 app.MapPost("/api/workspace/preview", async ([FromBody] PreviewTablePayload payload) => {
     var config = GetConfig();
-    string query = $"SELECT json_agg(t) FROM (SELECT * FROM {payload.SchemaName}.{payload.TableName} LIMIT 10) t;";
+    string query = $"SELECT json_agg(t) FROM (SELECT * FROM {payload.SchemaName}.{payload.TableName} LIMIT 100) t;";
     string json = await ExecutePsqlQueryAsync(query, config.PostgresUri);
     return Results.Content(json, "application/json");
 });

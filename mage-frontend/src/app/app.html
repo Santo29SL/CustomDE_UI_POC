@@ -204,7 +204,7 @@
           </div>
 
           <!-- Editor Split -->
-          <div class="editor-terminal-split">
+          <div class="editor-terminal-split" [style.grid-template-rows]="'1fr ' + terminalHeight() + 'px'">
             <!-- Monaco Editor Area -->
             <div class="editor-area">
               <div class="editor-toolbar">
@@ -239,6 +239,8 @@
 
             <!-- Terminal Output Area -->
             <div class="terminal-area">
+              <!-- Click & Drag Resize Handle -->
+              <div class="resize-handle" [class.active]="isResizing" (mousedown)="startResize($event)"></div>
               <div class="terminal-header">
                 <div class="terminal-tabs">
                   <button class="terminal-tab" [class.active]="activeTerminalTab() === 'terminal'" (click)="activeTerminalTab.set('terminal')">

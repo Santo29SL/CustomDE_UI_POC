@@ -460,12 +460,30 @@
 
 /* Terminal output style */
 .terminal-area {
+  position: relative;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   block-size: 100%;
+}
+
+.resize-handle {
+  position: absolute;
+  top: -4px;
+  left: 0;
+  right: 0;
+  height: 8px;
+  cursor: ns-resize;
+  z-index: 100;
+  background-color: transparent;
+  transition: background-color 0.2s ease;
+}
+
+.resize-handle:hover, .resize-handle.active {
+  background-color: var(--accent-green) !important;
+  box-shadow: 0 0 6px var(--accent-green);
 }
 
 .terminal-header {

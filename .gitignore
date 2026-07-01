@@ -1,0 +1,17 @@
+# Local Configuration Secrets
+.env
+MageGateway/config.json
+MageGateway/appsettings.json
+MageGateway/appsettings.Development.json
+
+# .NET Build Output
+**/bin/
+**/obj/
+.vs/
+.vscode/
+
+# Node/Angular Dependencies & Builds
+**/node_modules/
+**/dist/
+.angular/
+npm-cache/

@@ -1,0 +1,16 @@
+'Log files:
+/Users/santhoshsl/Custom_GUI_Airflow/mage-frontend/npm-cache/_logs/2026-06-30T06_19_31_017Z-debug-0.log
+
+# npm resolution error report
+
+While resolving: mage-frontend@0.0.0
+Found: @angular/common@22.0.4
+node_modules/@angular/common
+  @angular/common@"^22.0.0" from the root project
+
+Could not resolve dependency:
+peer @angular/common@"^21.1.4" from ngx-monaco-editor-v2@21.1.4
+node_modules/ngx-monaco-editor-v2
+  ngx-monaco-editor-v2@"21.1.4" from the root project
+
+Fix the upstream dependency conflict, or retry this command with --force or --legacy-peer-deps to accept an incorrect (and potentially broken) dependency resolution.

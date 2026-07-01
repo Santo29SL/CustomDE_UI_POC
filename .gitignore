@@ -14,4 +14,4 @@ MageGateway/appsettings.Development.json
 **/node_modules/
 **/dist/
 .angular/
-npm-cache/
+**/npm-cache/

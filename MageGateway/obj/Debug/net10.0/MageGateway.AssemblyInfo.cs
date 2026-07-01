@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("MageGateway")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e55244d8a2e13a905a662ca810b03134214a91b1")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+13ddde931c9dff14e6b543634a17779686f0d55a")]
 [assembly: System.Reflection.AssemblyProductAttribute("MageGateway")]
 [assembly: System.Reflection.AssemblyTitleAttribute("MageGateway")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

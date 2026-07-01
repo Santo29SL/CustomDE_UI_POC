@@ -25,9 +25,20 @@ def run_etl():
 
     print("📤 Loading records into postgres: {PROJECT}_bronze.{TABLE_NAME}...")
     pg_engine = create_engine(POSTGRES_URI)
+    
+    # Check if table exists first
+    table_exists = False
+    try:
+        with pg_engine.connect() as conn:
+            result = conn.execute(text("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = '{PROJECT}_bronze' AND table_name = '{TABLE_NAME}');"))
+            table_exists = result.scalar()
+    except Exception:
+        pass
+
     with pg_engine.begin() as conn:
         conn.execute(text("CREATE SCHEMA IF NOT EXISTS {PROJECT}_bronze;"))
-        conn.execute(text("TRUNCATE TABLE {PROJECT}_bronze.{TABLE_NAME} CASCADE"))
+        if table_exists:
+            conn.execute(text("TRUNCATE TABLE {PROJECT}_bronze.{TABLE_NAME} CASCADE;"))
         df.to_sql(name="{TABLE_NAME}", con=conn, schema="{PROJECT}_bronze", if_exists="append", index=False)
         print(f"✅ Successfully loaded {len(df)} records.")
 

@@ -356,7 +356,7 @@
   display: grid;
   grid-template-columns: 220px 1fr;
   gap: 1rem;
-  block-size: calc(100dvh - 110px);
+  block-size: calc(100dvh - 130px); /* Fit within viewport without causing scrollbars */
 }
 
 .file-browser {
@@ -439,16 +439,23 @@
   inline-size: 100%;
   position: relative;
   background-color: #ffffff;
-  min-block-size: 350px; /* Prevent height from collapsing to 0px */
+  min-block-size: 200px; /* Allow shrinking to prevent page overflow */
 }
 
-ngx-monaco-editor {
-  position: absolute;
+::ng-deep ngx-monaco-editor {
+  position: absolute !important;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
+  inline-size: 100% !important;
+  block-size: 100% !important;
   display: block;
+}
+
+::ng-deep ngx-monaco-editor .editor-container {
+  block-size: 100% !important;
+  inline-size: 100% !important;
 }
 
 /* Terminal output style */

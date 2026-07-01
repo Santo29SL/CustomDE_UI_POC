@@ -37,7 +37,10 @@ def run_etl():
     pg_engine = create_engine(POSTGRES_URI)
     with pg_engine.begin() as conn:
         conn.execute(text("CREATE SCHEMA IF NOT EXISTS expendsave_bronze;"))
-        conn.execute(text("TRUNCATE TABLE expendsave_bronze.users CASCADE"))
+        try:
+            conn.execute(text("TRUNCATE TABLE expendsave_bronze.users CASCADE;"))
+        except Exception:
+            pass
         df.to_sql(name="users", con=conn, schema="expendsave_bronze", if_exists="append", index=False)
         print(f"✅ Successfully loaded {len(df)} records.")
 

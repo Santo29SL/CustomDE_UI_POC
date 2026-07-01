@@ -125,14 +125,16 @@ async Task<string> ExecutePsqlQueryAsync(string query, string postgresUri)
     {
         using var process = new System.Diagnostics.Process();
         process.StartInfo.FileName = "psql";
-        // Clean query of quotes for shell passing
-        string escapedQuery = query.Replace("\"", "\\\"");
-        process.StartInfo.Arguments = $"\"{postgresUri}\" -t -A -c \"{escapedQuery}\"";
+        process.StartInfo.Arguments = $"\"{postgresUri}\" -t -A";
+        process.StartInfo.RedirectStandardInput = true;
         process.StartInfo.RedirectStandardOutput = true;
         process.StartInfo.RedirectStandardError = true;
         process.StartInfo.UseShellExecute = false;
         process.StartInfo.CreateNoWindow = true;
         process.Start();
+
+        await process.StandardInput.WriteAsync(query);
+        process.StandardInput.Close();
 
         string output = await process.StandardOutput.ReadToEndAsync();
         string error = await process.StandardError.ReadToEndAsync();
@@ -516,7 +518,7 @@ app.MapGet("/api/workspace/postgres-tables", async () => {
     // Look up tables in project schemas or default schemas
     string query = $@"
         SELECT json_agg(t) FROM (
-            SELECT table_schema as schemaName, table_name as tableName 
+            SELECT table_schema as ""schemaName"", table_name as ""tableName"" 
             FROM information_schema.tables 
             WHERE table_schema IN ('{proj}_bronze', '{proj}_silver', '{proj}_gold', 'bronze', 'silver', 'gold') 
             ORDER BY table_schema, table_name

@@ -1,6 +1,6 @@
 {
   "projectName": "ExpendSave",
-  "workspacePath": "../my_mage_project",
+  "workspacePath": "/Users/santhoshsl/custom-fabric-platform/my_mage_project",
   "executionMode": "docker",
   "dockerContainerName": "cranky_faraday",
   "postgresUri": "postgresql://postgres:postgres@localhost:5432/expendsave",

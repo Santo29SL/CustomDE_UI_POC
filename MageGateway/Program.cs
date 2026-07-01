@@ -30,7 +30,7 @@ if (!File.Exists(configPath))
     var defaultConfig = new ConfigModel
     {
         ProjectName = "my_project",
-        WorkspacePath = "/Users/santhoshsl/custom-fabric-platform/my_mage_project",
+        WorkspacePath = "../my_mage_project",
         ExecutionMode = "docker",
         DockerContainerName = "cranky_faraday",
         PostgresUri = "postgresql://postgres:postgres@localhost:5432/slinventoryDB",
@@ -171,11 +171,11 @@ string ResolveVirtualPath(string filename, string workspacePath)
     }
     else if (filename.StartsWith("silver/"))
     {
-        return Path.Combine(workspacePath, "dbt", "models", "silver", Path.GetFileName(filename));
+        return Path.Combine(workspacePath, "silver", Path.GetFileName(filename));
     }
     else if (filename.StartsWith("gold/"))
     {
-        return Path.Combine(workspacePath, "dbt", "models", "gold", Path.GetFileName(filename));
+        return Path.Combine(workspacePath, "gold", Path.GetFileName(filename));
     }
     
     return Path.Combine(workspacePath, filename);
@@ -293,12 +293,12 @@ app.MapGet("/api/workspace/files", () => {
     children.Add(new { name = "bronze", type = "directory", isOpen = true, children = bronzeList });
 
     // 3. Silver
-    string silverPath = Path.Combine(path, "dbt", "models", "silver");
+    string silverPath = Path.Combine(path, "silver");
     var silverList = ScanFilesRecursive(silverPath, "silver");
     children.Add(new { name = "silver", type = "directory", isOpen = true, children = silverList });
 
     // 4. Gold
-    string goldPath = Path.Combine(path, "dbt", "models", "gold");
+    string goldPath = Path.Combine(path, "gold");
     var goldList = ScanFilesRecursive(goldPath, "gold");
     children.Add(new { name = "gold", type = "directory", isOpen = true, children = goldList });
 
@@ -413,11 +413,26 @@ app.MapPost("/api/workspace/execute", async ([FromBody] ExecutePayload payload) 
             if (config.ExecutionMode == "docker")
             {
                 // Run inside the Mage docker container
-                string containerFile = $"/home/src/my_mage_project/{Path.GetFileName(fileName)}";
+                string subfolder = "";
+                if (fileName.Contains("bronze/")) subfolder = "bronze/";
+                else if (fileName.Contains("silver/")) subfolder = "silver/";
+                else if (fileName.Contains("gold/")) subfolder = "gold/";
+                
+                string containerFile = $"/home/src/my_mage_project/{subfolder}{Path.GetFileName(fileName)}";
                 
                 // First, write the latest code to the host directory (which syncs to the container)
                 string hostPath = ResolveVirtualPath(fileName, config.WorkspacePath);
+                Directory.CreateDirectory(Path.GetDirectoryName(hostPath)!);
                 File.WriteAllText(hostPath, code);
+
+                // Mirror to dbt models folder for dbt compilation/run
+                if (fileName.Contains("silver/") || fileName.Contains("gold/"))
+                {
+                    string dbtSubfolder = fileName.Contains("silver/") ? "silver" : "gold";
+                    string dbtPath = Path.Combine(config.WorkspacePath, "dbt", "models", dbtSubfolder, Path.GetFileName(fileName));
+                    Directory.CreateDirectory(Path.GetDirectoryName(dbtPath)!);
+                    File.WriteAllText(dbtPath, code);
+                }
 
                 process.StartInfo.FileName = "docker";
                 
@@ -540,7 +555,7 @@ app.MapPost("/api/workspace/preview", async ([FromBody] PreviewTablePayload payl
 app.MapPost("/api/ingest/initialize", ([FromBody] IngestInitializePayload payload) => {
     var config = GetConfig();
     string proj = config.ProjectName.ToLower().Replace(" ", "_");
-    string fileName = $"ingest_{payload.SourceType}_{payload.TableName}.py";
+    string fileName = $"bronze/ingest_{payload.SourceType}_{payload.TableName}.py";
     string filePath = ResolveVirtualPath(fileName, config.WorkspacePath);
     
     try
@@ -597,13 +612,30 @@ app.MapGet("/api/pipelines", async (IHttpClientFactory clientFactory) => {
     var config = GetConfig();
     var client = clientFactory.CreateClient();
     
+    string NormalizeBlockName(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return "";
+        var normalized = name.ToLower();
+        string[] prefixes = new[] { "ingest_", "stg_", "load_", "raw_", "clean_", "src_" };
+        foreach (var prefix in prefixes)
+        {
+            if (normalized.StartsWith(prefix)) normalized = normalized.Substring(prefix.Length);
+        }
+        string[] suffixes = new[] { "_etl", "_clean", "_table", "_model", "_source" };
+        foreach (var suffix in suffixes)
+        {
+            if (normalized.EndsWith(suffix)) normalized = normalized.Substring(0, normalized.Length - suffix.Length);
+        }
+        return normalized;
+    }
+
     var blocks = new List<object>();
     
     if (Directory.Exists(config.WorkspacePath))
     {
         var bronzePath = Path.Combine(config.WorkspacePath, "bronze");
-        var silverPath = Path.Combine(config.WorkspacePath, "dbt", "models", "silver");
-        var goldPath = Path.Combine(config.WorkspacePath, "dbt", "models", "gold");
+        var silverPath = Path.Combine(config.WorkspacePath, "silver");
+        var goldPath = Path.Combine(config.WorkspacePath, "gold");
         
         var bronzeFiles = new List<string>();
         var silverFiles = new List<string>();
@@ -657,9 +689,13 @@ app.MapGet("/api/pipelines", async (IHttpClientFactory clientFactory) => {
             var uuid = Path.GetFileNameWithoutExtension(fileRel);
             silverUuids.Add(uuid);
             
-            // Try to match upstream: find bronze uuids that match the name of the silver file
+            // Try to match upstream: find bronze uuids that match the name of the silver file using normalized name
+            var normSilver = NormalizeBlockName(uuid);
             var upstreams = bronzeUuids
-                .Where(b => uuid.Contains(b) || b.Contains(uuid))
+                .Where(b => {
+                    var normBronze = NormalizeBlockName(b);
+                    return normSilver.Contains(normBronze) || normBronze.Contains(normSilver);
+                })
                 .ToArray();
             
             if (upstreams.Length == 0)
@@ -683,9 +719,13 @@ app.MapGet("/api/pipelines", async (IHttpClientFactory clientFactory) => {
             var fileName = Path.GetFileName(fileRel);
             var uuid = Path.GetFileNameWithoutExtension(fileRel);
             
-            // Try to match upstream: find silver uuids that match
+            // Try to match upstream: find silver uuids that match using normalized name
+            var normGold = NormalizeBlockName(uuid);
             var upstreams = silverUuids
-                .Where(s => uuid.Contains(s) || s.Contains(uuid))
+                .Where(s => {
+                    var normSilver = NormalizeBlockName(s);
+                    return normGold.Contains(normSilver) || normSilver.Contains(normGold);
+                })
                 .ToArray();
             
             if (upstreams.Length == 0)

@@ -1,6 +1,5 @@
 import { Component, OnInit, signal, inject, computed } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { DecimalPipe, SlicePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EditorComponent } from 'ngx-monaco-editor-v2';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
@@ -16,7 +15,7 @@ interface FileNode {
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [FormsModule, EditorComponent, DecimalPipe, SlicePipe],
+  imports: [FormsModule, EditorComponent],
   templateUrl: './app.html',
   styleUrl: './app.css'
 })
@@ -44,6 +43,12 @@ export class App implements OnInit {
   readonly mageUrl = signal<string>('');
   readonly mageApiKey = signal<string>('');
   readonly supersetUrl = signal<string>('');
+
+  readonly safeSupersetUrl = computed<SafeResourceUrl>(() => {
+    const url = this.supersetUrl();
+    if (!url) return '';
+    return this.sanitizer.bypassSecurityTrustResourceUrl(url);
+  });
 
   // Ingestion views parameters
   readonly selectedSourceType = signal<string>('mongodb');
@@ -193,12 +198,6 @@ export class App implements OnInit {
     this.currentTab.set(tab);
   }
 
-  getSafeSupersetUrl(): SafeResourceUrl {
-    const url = this.supersetUrl();
-    if (!url) return '';
-    return this.sanitizer.bypassSecurityTrustResourceUrl(url);
-  }
-
   // ==========================================
   // INGESTION METHODS
   // ==========================================
@@ -232,26 +231,42 @@ export class App implements OnInit {
     };
 
     this.ingesting.set(true);
+    this.ingestionProgress.set(0);
     this.ingestionLogs.set(["[INFO] Generating Python ETL Ingestion code mapping for Medallion architecture..."]);
+
+    // Simulated progress increment
+    const interval = setInterval(() => {
+      const current = this.ingestionProgress();
+      if (current < 90) {
+        this.ingestionProgress.set(current + 15);
+      }
+    }, 100);
 
     this.http.post<any>(`${this.gatewayUrl}/ingest/initialize`, payload).subscribe({
       next: (res) => {
-        this.ingesting.set(false);
-        this.ingestionLogs.update(logs => [
-          ...logs,
-          `[SUCCESS] Python script initialized successfully: ${res.filename}`,
-          `[INFO] Directing to Notebook tab. Click 'Run Code' inside Monaco to start loading data.`
-        ]);
-        
-        // Reload files tree and auto open this generated script
-        this.loadWorkspaceFiles();
-        this.setTab('notebook');
+        clearInterval(interval);
+        this.ingestionProgress.set(100);
         setTimeout(() => {
-          this.openFileByPath(`my_mage_project/${res.filename}`);
+          this.ingesting.set(false);
+          this.ingestionProgress.set(0);
+          this.ingestionLogs.update(logs => [
+            ...logs,
+            `[SUCCESS] Python script initialized successfully: ${res.filename}`,
+            `[INFO] Directing to Notebook tab. Click 'Run Code' inside Monaco to start loading data.`
+          ]);
+          
+          // Reload files tree and auto open this generated script
+          this.loadWorkspaceFiles();
+          this.setTab('notebook');
+          setTimeout(() => {
+            this.openFileByPath(`my_mage_project/${res.filename}`);
+          }, 300);
         }, 300);
       },
       error: (err) => {
+        clearInterval(interval);
         this.ingesting.set(false);
+        this.ingestionProgress.set(0);
         this.ingestionLogs.update(logs => [...logs, `[ERROR] Script generation failed: ${err.message}`]);
       }
     });

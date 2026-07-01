@@ -410,7 +410,7 @@
 /* Editor & Terminal split */
 .editor-terminal-split {
   display: grid;
-  grid-template-rows: 1fr 280px;
+  grid-template-rows: 1fr 180px;
   gap: 1rem;
   block-size: 100%;
   overflow: hidden;

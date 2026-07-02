@@ -352,7 +352,7 @@
           <!-- DAG Viewer and Run Area -->
           <div class="dag-viewer-panel">
             <div class="editor-toolbar" style="background-color: #0d121f;">
-              <h3>Pipeline DAG: <span style="color: var(--accent-green-light)">{{ selectedPipeline()?.name || 'No pipeline selected' }}</span></h3>
+              <h3 style="color: var(--accent-green-light)">Pipeline DAG: {{ selectedPipeline()?.name || 'No pipeline selected' }}</h3>
               <button class="btn btn-primary" style="margin-inline-start: auto; padding: 0.35rem 1rem; font-size: 0.8rem;" (click)="runPipeline()" [disabled]="pipelineRunning() || !selectedPipeline()">
                 @if (pipelineRunning()) { <span class="spinner"></span> Running DAG... }
                 @else { ⚡ Execute Pipeline }

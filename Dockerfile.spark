@@ -1,0 +1,24 @@
+FROM mageai/mageai:latest
+
+# Install Java 17 and procps
+RUN apt-get update && \
+    apt-get install -y openjdk-17-jdk-headless procps && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set Spark environment variables
+ENV SPARK_VERSION=3.5.1
+ENV HADOOP_VERSION=3
+ENV SPARK_HOME=/opt/spark
+ENV PATH=$PATH:$SPARK_HOME/bin
+
+# Copy Spark tarball from local build context
+COPY spark-3.5.1-bin-hadoop3.tgz /tmp/
+
+# Extract Spark and remove archive
+RUN tar -xzf /tmp/spark-3.5.1-bin-hadoop3.tgz -C /opt && \
+    mv /opt/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION} /opt/spark && \
+    rm /tmp/spark-3.5.1-bin-hadoop3.tgz
+
+# Install PySpark matching the Spark version
+RUN pip install pyspark==3.5.1

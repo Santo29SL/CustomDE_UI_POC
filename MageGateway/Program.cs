@@ -385,6 +385,55 @@ app.MapPost("/api/workspace/file", ([FromBody] WritePayload payload) => {
     }
 });
 
+// Delete file
+app.MapDelete("/api/workspace/file", ([FromQuery] string filename) => {
+    var config = GetConfig();
+    string targetFile = ResolveVirtualPath(filename, config.WorkspacePath);
+    
+    try
+    {
+        if (File.Exists(targetFile))
+        {
+            File.Delete(targetFile);
+            return Results.Json(new { status = "success", message = $"Successfully deleted file: {filename}" });
+        }
+        return Results.NotFound(new { status = "error", message = $"File not found: {filename}" });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { status = "error", message = ex.Message });
+    }
+});
+
+// Rename file
+app.MapPost("/api/workspace/rename", ([FromBody] RenamePayload payload) => {
+    var config = GetConfig();
+    string oldPath = ResolveVirtualPath(payload.OldFilename, config.WorkspacePath);
+    string newPath = ResolveVirtualPath(payload.NewFilename, config.WorkspacePath);
+    
+    try
+    {
+        if (!File.Exists(oldPath))
+        {
+            return Results.NotFound(new { status = "error", message = $"Source file not found: {payload.OldFilename}" });
+        }
+        
+        string? dir = Path.GetDirectoryName(newPath);
+        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+        
+        File.Move(oldPath, newPath);
+        return Results.Json(new { status = "success", message = $"Successfully renamed file from {payload.OldFilename} to {payload.NewFilename}" });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { status = "error", message = ex.Message });
+    }
+});
+
+
 // ==========================================
 // CODE EXECUTION & TERMINAL RUNS
 // ==========================================
@@ -869,3 +918,5 @@ public record ExecutePayload(string FileName, string Code, string Language);
 public record WritePayload(string Filename, string Code);
 public record PreviewTablePayload(string SchemaName, string TableName);
 public record IngestInitializePayload(string SourceType, string TableName);
+public record RenamePayload(string OldFilename, string NewFilename);
+

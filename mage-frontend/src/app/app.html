@@ -2,8 +2,8 @@
   <!-- Sidebar Navigation -->
   <aside class="sidebar">
     <div class="logo-section">
-      <div class="logo-icon">M</div>
-      <div class="logo-text">Mage GUI</div>
+      <div class="logo-icon">DE</div>
+      <div class="logo-text">CUSTOM_DE GUI</div>
     </div>
 
     <nav class="nav-group">
@@ -185,16 +185,26 @@
                         @if (child.isOpen) {
                           <div class="tree-children">
                             @for (subchild of child.children; track subchild.name) {
-                              <div class="tree-node" [class.selected]="selectedFilePath() === 'my_mage_project/' + child.name + '/' + subchild.name" (click)="selectFileNode('my_mage_project/' + child.name + '/' + subchild.name, subchild)">
-                                📄 {{ subchild.name }}
+                              <div class="tree-node file-tree-item" [class.selected]="selectedFilePath() === 'my_mage_project/' + child.name + '/' + subchild.name" (click)="selectFileNode('my_mage_project/' + child.name + '/' + subchild.name, subchild)">
+                                <span class="file-name-text">📄 {{ subchild.name }}</span>
+                                <span class="file-actions" (click)="$event.stopPropagation()">
+                                  <button class="file-action-btn" (click)="renameFilePrompt('my_mage_project/' + child.name + '/' + subchild.name)" title="Rename File">✏️</button>
+                                  <button class="file-action-btn" (click)="deleteFilePrompt('my_mage_project/' + child.name + '/' + subchild.name)" title="Delete File">🗑️</button>
+                                </span>
                               </div>
+
                             }
                           </div>
                         }
                       } @else {
-                        <div class="tree-node" [class.selected]="selectedFilePath() === 'my_mage_project/' + child.name" (click)="selectFileNode('my_mage_project/' + child.name, child)">
-                          📄 {{ child.name }}
+                        <div class="tree-node file-tree-item" [class.selected]="selectedFilePath() === 'my_mage_project/' + child.name" (click)="selectFileNode('my_mage_project/' + child.name, child)">
+                          <span class="file-name-text">📄 {{ child.name }}</span>
+                          <span class="file-actions" (click)="$event.stopPropagation()">
+                            <button class="file-action-btn" (click)="renameFilePrompt('my_mage_project/' + child.name)" title="Rename File">✏️</button>
+                            <button class="file-action-btn" (click)="deleteFilePrompt('my_mage_project/' + child.name)" title="Delete File">🗑️</button>
+                          </span>
                         </div>
+
                       }
                     }
                   </div>
@@ -218,9 +228,16 @@
                   </select>
                 </div>
                 
-                <span style="font-size: 0.8rem; color: var(--text-muted)">
+                <span style="font-size: 0.8rem; color: var(--text-muted); display: inline-flex; align-items: center; gap: 0.5rem;">
                   File: <strong style="color: var(--text-secondary)">{{ selectedFilePath() || 'scratchpad.py' }}</strong>
+                  @if (selectedFilePath()) {
+                    <span style="display: inline-flex; gap: 0.25rem;">
+                      <button class="btn btn-secondary" style="padding: 0.15rem 0.35rem; font-size: 0.7rem; border-color: rgba(255,255,255,0.1);" (click)="renameFilePrompt(selectedFilePath())" title="Rename file">✏️ Rename</button>
+                      <button class="btn btn-secondary" style="padding: 0.15rem 0.35rem; font-size: 0.7rem; color: var(--text-error); border-color: rgba(239, 68, 68, 0.2);" (click)="deleteFilePrompt(selectedFilePath())" title="Delete file">🗑️ Delete</button>
+                    </span>
+                  }
                 </span>
+
 
                 <button class="btn btn-secondary" style="margin-inline-start: auto; padding: 0.35rem 0.75rem; font-size: 0.8rem;" (click)="saveFile()">
                   💾 Save Code

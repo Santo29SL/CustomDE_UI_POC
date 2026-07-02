@@ -452,6 +452,70 @@ export class App implements OnInit, OnDestroy {
     });
   }
 
+  renameFilePrompt(filePath: string) {
+    if (!filePath) return;
+    
+    // Default to the current filename without the "my_mage_project/" prefix
+    let displayPath = filePath;
+    if (displayPath.startsWith("my_mage_project/")) {
+      displayPath = displayPath.substring("my_mage_project/".length);
+    }
+    
+    const newFilename = prompt("Enter new filename relative to workspace (e.g. bronze/my_file.py):", displayPath);
+    if (!newFilename || newFilename === displayPath) return;
+
+    const payload = {
+      oldFilename: filePath,
+      newFilename: "my_mage_project/" + newFilename
+    };
+
+    this.http.post<any>(`${this.gatewayUrl}/workspace/rename`, payload).subscribe({
+      next: (res) => {
+        this.loadWorkspaceFiles();
+        this.loadPipelines();
+        
+        // If the renamed file is the currently open file, reopen it under the new path
+        if (this.selectedFilePath() === filePath) {
+          this.openFileByPath("my_mage_project/" + newFilename);
+        }
+        this.terminalLogs.set(`[INFO] Renamed file successfully to: ${newFilename}`);
+      },
+      error: (err) => {
+        alert("Error renaming file: " + err.message);
+      }
+    });
+  }
+
+  deleteFilePrompt(filePath: string) {
+    if (!filePath) return;
+
+    let displayPath = filePath;
+    if (displayPath.startsWith("my_mage_project/")) {
+      displayPath = displayPath.substring("my_mage_project/".length);
+    }
+
+    if (!confirm(`Are you sure you want to delete ${displayPath}? This action cannot be undone.`)) {
+      return;
+    }
+
+    this.http.delete<any>(`${this.gatewayUrl}/workspace/file?filename=${filePath}`).subscribe({
+      next: (res) => {
+        this.loadWorkspaceFiles();
+        this.loadPipelines();
+
+        // If the deleted file was the currently open file, clear the editor
+        if (this.selectedFilePath() === filePath) {
+          this.selectedFilePath.set('');
+          this.editorCode.set('# Select a file to edit, or write code here...');
+        }
+        this.terminalLogs.set(`[INFO] Deleted file successfully: ${displayPath}`);
+      },
+      error: (err) => {
+        alert("Error deleting file: " + err.message);
+      }
+    });
+  }
+
   runCode() {
     if (this.executing()) return;
 

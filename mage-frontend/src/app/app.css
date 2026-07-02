@@ -941,3 +941,49 @@
     stroke-dashoffset: -1000;
   }
 }
+
+/* File browser hover action buttons */
+.file-tree-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+  width: 100%;
+}
+
+.file-name-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-actions {
+  display: none;
+  gap: 0.15rem;
+  padding-inline-end: 0.25rem;
+}
+
+.file-tree-item:hover .file-actions {
+  display: flex;
+  align-items: center;
+}
+
+.file-action-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0 0.1rem;
+  font-size: 0.75rem;
+  opacity: 0.5;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-action-btn:hover {
+  opacity: 1;
+  transform: scale(1.15);
+}
+

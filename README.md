@@ -24,8 +24,8 @@ A premium, unified data engineering control center built with a modern **Angular
 graph TD
     A["Angular Dashboard<br/>(Port 4200)"] -->|HTTP / REST| B[".NET Gateway API<br/>(Port 5050)"]
     B -->|Local Symlink Sync| C["Workspace Files<br/>(my_mage_project)"]
-    B -->|Docker Proxy (Port 6789)| D["Mage AI Container<br/>(cranky_faraday)"]
-    B -->|SQL Stdin Tunnel (Port 5432)| E["PostgreSQL Database<br/>(expendsave)"]
+    B -->|"Docker Proxy (Port 6789)"| D["Mage AI Container<br/>(cranky_faraday)"]
+    B -->|"SQL Stdin Tunnel (Port 5432)"| E["PostgreSQL Database<br/>(expendsave)"]
     E -->|Schemas| F["expendsave_bronze"]
     E -->|Schemas| G["expendsave_silver"]
     E -->|Schemas| H["expendsave_gold"]

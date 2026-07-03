@@ -10,7 +10,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Enable CORS for Angular frontend
 builder.Services.AddCors(options => {
     options.AddPolicy("AllowAngular", policy => 
-        policy.SetIsOriginAllowed(origin => true)
+        policy.WithOrigins("http://localhost:4200", "http://127.0.0.1:4200")
               .AllowAnyMethod()
               .AllowAnyHeader()
               .AllowCredentials());
@@ -190,7 +190,7 @@ async Task<string> ExecutePsqlQueryAsync(string query, string postgresUri)
     }
 }
 
-// Helper to translate virtual UI folder paths to host paths
+// Helper to translate virtual UI folder paths to host paths safely (preventing directory traversal)
 string ResolveVirtualPath(string filename, string workspacePath)
 {
     filename = filename.TrimStart('/');
@@ -199,20 +199,33 @@ string ResolveVirtualPath(string filename, string workspacePath)
         filename = filename.Substring("my_mage_project/".Length);
     }
     
+    string targetPath;
     if (filename.StartsWith("bronze/"))
     {
-        return Path.Combine(workspacePath, "bronze", Path.GetFileName(filename));
+        targetPath = Path.Combine(workspacePath, "bronze", Path.GetFileName(filename));
     }
     else if (filename.StartsWith("silver/"))
     {
-        return Path.Combine(workspacePath, "silver", Path.GetFileName(filename));
+        targetPath = Path.Combine(workspacePath, "silver", Path.GetFileName(filename));
     }
     else if (filename.StartsWith("gold/"))
     {
-        return Path.Combine(workspacePath, "gold", Path.GetFileName(filename));
+        targetPath = Path.Combine(workspacePath, "gold", Path.GetFileName(filename));
+    }
+    else
+    {
+        targetPath = Path.Combine(workspacePath, filename);
     }
     
-    return Path.Combine(workspacePath, filename);
+    string fullTargetPath = Path.GetFullPath(targetPath);
+    string fullWorkspacePath = Path.GetFullPath(workspacePath);
+    
+    if (!fullTargetPath.StartsWith(fullWorkspacePath, StringComparison.OrdinalIgnoreCase))
+    {
+        throw new UnauthorizedAccessException("Access denied: Path traversal attempt detected.");
+    }
+    
+    return fullTargetPath;
 }
 
 // List directory content helpers
@@ -272,10 +285,16 @@ app.MapPost("/api/metadata", ([FromBody] ConfigModel newConfig) => {
 // Create project schemas dynamically in Postgres
 app.MapPost("/api/project/initialize", async ([FromBody] InitProjectPayload payload) => {
     var config = GetConfig();
+    
+    string proj = (payload.ProjectName ?? "").ToLower().Replace(" ", "_");
+    if (string.IsNullOrEmpty(proj) || !System.Text.RegularExpressions.Regex.IsMatch(proj, "^[a-zA-Z_][a-zA-Z0-9_]*$"))
+    {
+        return Results.BadRequest(new { status = "error", message = "Invalid project name. Only alphanumeric characters and underscores are allowed." });
+    }
+
     config.ProjectName = payload.ProjectName;
     SaveConfig(config);
 
-    string proj = payload.ProjectName.ToLower().Replace(" ", "_");
     string sql = $@"
         CREATE SCHEMA IF NOT EXISTS {proj}_bronze;
         CREATE SCHEMA IF NOT EXISTS {proj}_silver;
@@ -351,25 +370,32 @@ app.MapGet("/api/workspace/files", () => {
 
 // Read file content
 app.MapGet("/api/workspace/file", ([FromQuery] string filename) => {
-    var config = GetConfig();
-    string targetFile = ResolveVirtualPath(filename, config.WorkspacePath);
-    
-    if (File.Exists(targetFile))
+    try
     {
-        string text = File.ReadAllText(targetFile);
-        return Results.Json(new { content = text });
+        var config = GetConfig();
+        string targetFile = ResolveVirtualPath(filename, config.WorkspacePath);
+        
+        if (File.Exists(targetFile))
+        {
+            string text = File.ReadAllText(targetFile);
+            return Results.Json(new { content = text });
+        }
+        
+        return Results.NotFound(new { status = "error", message = $"File not found at path: {targetFile}" });
     }
-    
-    return Results.NotFound(new { status = "error", message = $"File not found at path: {targetFile}" });
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { status = "error", message = ex.Message });
+    }
 });
 
 // Save file content
 app.MapPost("/api/workspace/file", ([FromBody] WritePayload payload) => {
-    var config = GetConfig();
-    string targetFile = ResolveVirtualPath(payload.Filename, config.WorkspacePath);
-    
     try
     {
+        var config = GetConfig();
+        string targetFile = ResolveVirtualPath(payload.Filename, config.WorkspacePath);
+        
         string? dir = Path.GetDirectoryName(targetFile);
         if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
         {
@@ -387,11 +413,11 @@ app.MapPost("/api/workspace/file", ([FromBody] WritePayload payload) => {
 
 // Delete file
 app.MapDelete("/api/workspace/file", ([FromQuery] string filename) => {
-    var config = GetConfig();
-    string targetFile = ResolveVirtualPath(filename, config.WorkspacePath);
-    
     try
     {
+        var config = GetConfig();
+        string targetFile = ResolveVirtualPath(filename, config.WorkspacePath);
+        
         if (File.Exists(targetFile))
         {
             File.Delete(targetFile);
@@ -407,12 +433,12 @@ app.MapDelete("/api/workspace/file", ([FromQuery] string filename) => {
 
 // Rename file
 app.MapPost("/api/workspace/rename", ([FromBody] RenamePayload payload) => {
-    var config = GetConfig();
-    string oldPath = ResolveVirtualPath(payload.OldFilename, config.WorkspacePath);
-    string newPath = ResolveVirtualPath(payload.NewFilename, config.WorkspacePath);
-    
     try
     {
+        var config = GetConfig();
+        string oldPath = ResolveVirtualPath(payload.OldFilename, config.WorkspacePath);
+        string newPath = ResolveVirtualPath(payload.NewFilename, config.WorkspacePath);
+        
         if (!File.Exists(oldPath))
         {
             return Results.NotFound(new { status = "error", message = $"Source file not found: {payload.OldFilename}" });

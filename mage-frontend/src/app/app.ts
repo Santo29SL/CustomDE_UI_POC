@@ -28,6 +28,12 @@ export class App implements OnInit, OnDestroy {
   readonly currentTab = signal<string>('ingest');
   readonly settingsModalOpen = signal<boolean>(false);
 
+  // Project Initializer signals
+  readonly projectModalOpen = signal<boolean>(false);
+  readonly projectInitMode = signal<string>('new');
+  readonly newProjectName = signal<string>('');
+  readonly selectedExistingProject = signal<string>('');
+
   // Configuration settings signals
   readonly projectName = signal<string>('my_project');
   readonly workspacePath = signal<string>('');
@@ -238,18 +244,60 @@ export class App implements OnInit, OnDestroy {
   // INGESTION METHODS
   // ==========================================
 
+  readonly existingProjects = signal<string[]>([]);
+
+  loadExistingProjects() {
+    this.http.get<string[]>(`${this.gatewayUrl}/workspace/projects`).subscribe({
+      next: (data) => {
+        this.existingProjects.set(data || []);
+      },
+      error: () => {
+        this.existingProjects.set(['es', 'healthcare']);
+      }
+    });
+  }
+
   initializeProjectSchema() {
-    const name = prompt("Enter project name to initialize (e.g. ecom_store):", this.projectName());
-    if (!name) return;
+    this.newProjectName.set('');
+    this.loadExistingProjects();
+    this.projectModalOpen.set(true);
+    
+    setTimeout(() => {
+      const existing = this.existingProjects();
+      if (existing.length > 0) {
+        this.selectedExistingProject.set(existing[0]);
+      } else {
+        this.selectedExistingProject.set('');
+      }
+    }, 150);
+  }
+
+  submitProjectInitialization() {
+    let name = "";
+    if (this.projectInitMode() === 'new') {
+      name = this.newProjectName().trim();
+      if (!name) {
+        alert("Please enter a new project name.");
+        return;
+      }
+    } else {
+      name = this.selectedExistingProject();
+      if (!name) {
+        alert("Please select an existing project folder.");
+        return;
+      }
+    }
 
     this.http.post<any>(`${this.gatewayUrl}/project/initialize`, { ProjectName: name }).subscribe({
       next: (res) => {
         this.projectName.set(name);
+        this.projectModalOpen.set(false);
         alert(res.message);
         this.loadDbTables();
+        this.loadWorkspaceFiles();
       },
       error: (err) => {
-        alert('Initialization failed: ' + err.message);
+        alert('Initialization failed: ' + (err.error?.message || err.message));
       }
     });
   }
@@ -434,8 +482,14 @@ export class App implements OnInit, OnDestroy {
       starterCode = "";
     }
 
+    const proj = this.projectName().toLowerCase().replace(/\s+/g, '_');
+    let targetPath = filename;
+    if (!filename.startsWith(proj + "/")) {
+      targetPath = proj + "/" + filename;
+    }
+
     const payload = {
-      filename: "my_mage_project/" + filename,
+      filename: "my_mage_project/" + targetPath,
       code: starterCode
     };
 
@@ -443,7 +497,7 @@ export class App implements OnInit, OnDestroy {
       next: () => {
         this.loadWorkspaceFiles();
         this.loadPipelines(); // Dynamically updates the DAG lineage chart!
-        this.openFileByPath("my_mage_project/" + filename);
+        this.openFileByPath("my_mage_project/" + targetPath);
         this.terminalLogs.set(`[INFO] Created new file: ${filename}`);
       },
       error: (err) => {
@@ -604,7 +658,7 @@ export class App implements OnInit, OnDestroy {
       layerName = schema.substring(proj.length + 1);
     }
     
-    let path = `my_mage_project/${layerName}/${tableName}.sql`;
+    let path = `my_mage_project/${proj}/${layerName}/${tableName}.sql`;
     this.openFileByPath(path);
   }
 

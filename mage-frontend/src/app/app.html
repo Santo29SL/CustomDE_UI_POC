@@ -356,9 +356,14 @@
                                   <span class="table-name">{{ table.tableName }}</span>
                                   <span class="table-schema">{{ table.schemaName }}.{{ table.tableName }}</span>
                                 </div>
-                                <button class="btn btn-secondary schema-preview-btn" (click)="previewDbTable(table.schemaName, table.tableName)">
-                                  🔍 Preview
-                                </button>
+                                <div style="display: flex; gap: 0.4rem; justify-content: flex-end; flex-shrink: 0;">
+                                  <button class="btn btn-secondary schema-preview-btn" style="padding: 0.2rem 0.4rem; font-size: 0.7rem;" (click)="previewDbTable(table.schemaName, table.tableName)">
+                                    🔍 Preview
+                                  </button>
+                                  <button class="btn btn-danger schema-preview-btn" style="padding: 0.2rem 0.4rem; font-size: 0.7rem;" (click)="deleteDbTable(table.schemaName, table.tableName)">
+                                    🗑️ Delete
+                                  </button>
+                                </div>
                               </div>
                             }
                           } @else {

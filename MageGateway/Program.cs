@@ -53,7 +53,7 @@ void LoadDotEnv()
 LoadDotEnv();
 
 // Path to C# configurations
-string gatewayDir = AppDomain.CurrentDomain.BaseDirectory;
+string gatewayDir = Directory.GetCurrentDirectory();
 string configPath = Path.Combine(gatewayDir, "config.json");
 
 // Fallback configuration if config.json does not exist
@@ -609,7 +609,7 @@ app.MapPost("/api/workspace/execute", async ([FromBody] ExecutePayload payload) 
                 }
 
                 // Mirror to dbt models folder for dbt compilation/run
-                if (cleanFileName.Contains("/silver/") || cleanFileName.Contains("/gold/"))
+                if ((cleanFileName.Contains("/silver/") || cleanFileName.Contains("/gold/")) && cleanFileName.EndsWith(".sql"))
                 {
                     string dbtSubfolder = cleanFileName.Contains("/silver/") ? "silver" : "gold";
                     // If nested under project, save under project's dbt directory
@@ -623,7 +623,7 @@ app.MapPost("/api/workspace/execute", async ([FromBody] ExecutePayload payload) 
 
                 process.StartInfo.FileName = "docker";
                 
-                if (cleanFileName.Contains("/silver/") || cleanFileName.Contains("/gold/"))
+                if ((cleanFileName.Contains("/silver/") || cleanFileName.Contains("/gold/")) && cleanFileName.EndsWith(".sql"))
                 {
                     // DBT runs inside container
                     string modelName = Path.GetFileNameWithoutExtension(cleanFileName);
@@ -638,7 +638,7 @@ app.MapPost("/api/workspace/execute", async ([FromBody] ExecutePayload payload) 
                     // Python/R execution in container
                     string commandRunner = "python";
                     if (language == "r") commandRunner = "Rscript";
-                    else if (language == "pyspark") commandRunner = "spark-submit";
+                    else if (language == "pyspark") commandRunner = "spark-submit --packages org.postgresql:postgresql:42.7.3";
 
                     process.StartInfo.Arguments = $"exec -e DOCKER_ENV=true {config.DockerContainerName} {commandRunner} {containerFile}";
                 }
@@ -678,8 +678,16 @@ app.MapPost("/api/workspace/execute", async ([FromBody] ExecutePayload payload) 
                     if (language == "r") commandRunner = "Rscript";
                     else if (language == "pyspark") commandRunner = "spark-submit";
 
-                    process.StartInfo.FileName = commandRunner;
-                    process.StartInfo.Arguments = $"\"{hostPath}\"";
+                    if (language == "pyspark")
+                    {
+                        process.StartInfo.FileName = "spark-submit";
+                        process.StartInfo.Arguments = $"--packages org.postgresql:postgresql:42.7.3 \"{hostPath}\"";
+                    }
+                    else
+                    {
+                        process.StartInfo.FileName = commandRunner;
+                        process.StartInfo.Arguments = $"\"{hostPath}\"";
+                    }
                 }
             }
 
@@ -752,6 +760,25 @@ app.MapPost("/api/workspace/preview", async ([FromBody] PreviewTablePayload payl
     string query = $"SELECT json_agg(t) FROM (SELECT * FROM {payload.SchemaName}.{payload.TableName} LIMIT 100) t;";
     string json = await ExecutePsqlQueryAsync(query, config.PostgresUri);
     return Results.Content(json, "application/json");
+});
+
+app.MapDelete("/api/workspace/postgres-table", async (string schemaName, string tableName) => {
+    var config = GetConfig();
+    if (string.IsNullOrEmpty(schemaName) || string.IsNullOrEmpty(tableName))
+    {
+        return Results.BadRequest(new { status = "error", message = "Schema name and Table name are required." });
+    }
+    
+    string sql = $"DROP TABLE IF EXISTS \"{schemaName}\".\"{tableName}\" CASCADE;";
+    try
+    {
+        await ExecutePsqlQueryAsync(sql, config.PostgresUri);
+        return Results.Json(new { status = "success", message = $"Dropped table {schemaName}.{tableName} successfully." });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { status = "error", message = ex.Message });
+    }
 });
 
 // ==========================================

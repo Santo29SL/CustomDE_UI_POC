@@ -18,5 +18,5 @@ RUN wget -q https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-$
     mv /opt/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION} ${SPARK_HOME} && \
     rm /tmp/spark.tgz
 
-# Install PySpark matching the Spark version
-RUN pip install pyspark==3.5.1
+# Install PySpark matching the Spark version and MySQL drivers
+RUN pip install pyspark==3.5.1 pymysql cryptography

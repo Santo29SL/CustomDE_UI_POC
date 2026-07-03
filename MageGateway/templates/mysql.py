@@ -3,7 +3,9 @@ import os
 import pandas as pd
 from sqlalchemy import create_engine, text
 
-MYSQL_URI = "mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
+import urllib.parse
+
+MYSQL_URI = "mysql+pymysql://{MYSQL_USER}:" + urllib.parse.quote_plus("{MYSQL_PASSWORD}") + "@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
 POSTGRES_URI = "{POSTGRES_URI}"
 
 # Docker DNS overrides

@@ -46,8 +46,8 @@ export class App implements OnInit, OnDestroy {
   readonly mysqlUser = signal<string>('root');
   readonly mysqlPassword = signal<string>('password');
   readonly mysqlDatabase = signal<string>('mysqldb');
-  readonly mageUrl = signal<string>('');
-  readonly mageApiKey = signal<string>('');
+  readonly mageUrl = signal<string>('http://localhost:6789/api');
+  readonly mageApiKey = signal<string>('zkWlN0PkIKSN0C11CfUHUj84OT5XOJ6tDZ6bDRO2');
   readonly supersetUrl = signal<string>('');
 
   readonly safeSupersetUrl = computed<SafeResourceUrl>(() => {
@@ -233,11 +233,39 @@ export class App implements OnInit, OnDestroy {
     });
   }
 
+  saveSettingsSilently() {
+    const payload = {
+      projectName: this.projectName(),
+      workspacePath: this.workspacePath(),
+      executionMode: this.executionMode(),
+      dockerContainerName: this.dockerContainerName(),
+      postgresUri: this.postgresUri(),
+      mongoUri: this.mongoUri(),
+      mysqlHost: this.mysqlHost(),
+      mysqlPort: this.mysqlPort(),
+      mysqlUser: this.mysqlUser(),
+      mysqlPassword: this.mysqlPassword(),
+      mysqlDatabase: this.mysqlDatabase(),
+      mageUrl: this.mageUrl(),
+      mageApiKey: this.mageApiKey(),
+      supersetUrl: this.supersetUrl()
+    };
+
+    this.http.post<any>(`${this.gatewayUrl}/metadata`, payload).subscribe({
+      error: (err) => console.error('Silent save failed:', err)
+    });
+  }
+
   setTab(tab: string) {
     this.currentTab.set(tab);
     if (tab === 'pipelines') {
       this.updateDagConnections();
     }
+  }
+
+  selectSourceType(type: string) {
+    this.selectedSourceType.set(type);
+    alert(`Please check your settings configuration to ensure your connection details are correct for ${type === 'mongodb' ? 'MongoDB' : 'MySQL'}.`);
   }
 
   // ==========================================
@@ -293,6 +321,7 @@ export class App implements OnInit, OnDestroy {
         this.projectName.set(name);
         this.projectModalOpen.set(false);
         alert(res.message);
+        alert("Please check your settings configuration to ensure all connection details are correct for this project.");
         this.loadDbTables();
         this.loadWorkspaceFiles();
       },
@@ -308,6 +337,9 @@ export class App implements OnInit, OnDestroy {
       alert("Please enter a collection or table name to ingest.");
       return;
     }
+
+    // Auto-save the currently entered MySQL database details before generating the ingestion script
+    this.saveSettingsSilently();
 
     const payload = {
       SourceType: this.selectedSourceType(),

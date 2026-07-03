@@ -683,6 +683,24 @@ export class App implements OnInit, OnDestroy {
     });
   }
 
+  deleteDbTable(schema: string, table: string) {
+    if (!confirm(`Are you sure you want to drop database table "${schema}.${table}"? This will permanently delete all records inside it.`)) {
+      return;
+    }
+    
+    this.http.delete<any>(`${this.gatewayUrl}/workspace/postgres-table?schemaName=${schema}&tableName=${table}`).subscribe({
+      next: (res) => {
+        this.loadDbTables();
+        this.terminalLogs.set(`[SUCCESS] Dropped database table successfully: ${schema}.${table}`);
+        // If we were previewing this table, clear preview
+        this.sqlResults.set([]);
+      },
+      error: (err) => {
+        alert("Failed to drop database table: " + (err.error?.message || err.message));
+      }
+    });
+  }
+
   openFileForTable(schema: string, tableName: string) {
     const proj = this.projectName().toLowerCase().replace(/\s+/g, '_');
     let layerName = schema;

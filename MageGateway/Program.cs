@@ -85,11 +85,20 @@ ConfigModel GetConfig()
     try
     {
         string json = File.ReadAllText(configPath);
-        return JsonSerializer.Deserialize<ConfigModel>(json) ?? new ConfigModel();
+        var config = JsonSerializer.Deserialize<ConfigModel>(json) ?? new ConfigModel();
+        
+        // Always prefill common Mage credentials if missing
+        if (string.IsNullOrEmpty(config.MageUrl)) config.MageUrl = "http://localhost:6789/api";
+        if (string.IsNullOrEmpty(config.MageApiKey)) config.MageApiKey = "zkWlN0PkIKSN0C11CfUHUj84OT5XOJ6tDZ6bDRO2";
+        
+        return config;
     }
     catch
     {
-        return new ConfigModel();
+        var defaults = new ConfigModel();
+        defaults.MageUrl = "http://localhost:6789/api";
+        defaults.MageApiKey = "zkWlN0PkIKSN0C11CfUHUj84OT5XOJ6tDZ6bDRO2";
+        return defaults;
     }
 }
 

@@ -68,10 +68,10 @@
             </p>
 
             <div class="source-selector-tabs">
-              <div class="source-tab" [class.active]="selectedSourceType() === 'mongodb'" (click)="selectedSourceType.set('mongodb')">
+              <div class="source-tab" [class.active]="selectedSourceType() === 'mongodb'" (click)="selectSourceType('mongodb')">
                 🍃 MongoDB
               </div>
-              <div class="source-tab" [class.active]="selectedSourceType() === 'mysql'" (click)="selectedSourceType.set('mysql')">
+              <div class="source-tab" [class.active]="selectedSourceType() === 'mysql'" (click)="selectSourceType('mysql')">
                 🐬 MySQL Workbench
               </div>
             </div>
@@ -610,10 +610,42 @@
           <input class="form-input" type="text" [ngModel]="postgresUri()" (ngModelChange)="postgresUri.set($event)">
         </div>
 
-        <div class="form-group">
-          <label class="form-label">MongoDB Connection URI</label>
-          <input class="form-input" type="text" [ngModel]="mongoUri()" (ngModelChange)="mongoUri.set($event)">
-        </div>
+        @if (selectedSourceType() === 'mongodb') {
+          <div class="form-group">
+            <label class="form-label">MongoDB Connection URI</label>
+            <input class="form-input" type="text" [ngModel]="mongoUri()" (ngModelChange)="mongoUri.set($event)">
+          </div>
+        }
+
+        @if (selectedSourceType() === 'mysql') {
+          <div style="border-top: 1px solid var(--border-subtle); padding-top: 0.75rem; margin-top: 0.75rem; margin-bottom: 0.75rem;">
+            <h4 style="font-size: 0.9rem; margin-bottom: 0.75rem; color: var(--text-primary); font-weight: 700;">MySQL source database</h4>
+            <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem;">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" style="font-size: 0.75rem;">MySQL Host</label>
+                <input class="form-input" type="text" [ngModel]="mysqlHost()" (ngModelChange)="mysqlHost.set($event)">
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" style="font-size: 0.75rem;">Port</label>
+                <input class="form-input" type="text" [ngModel]="mysqlPort()" (ngModelChange)="mysqlPort.set($event)">
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem;">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" style="font-size: 0.75rem;">User</label>
+                <input class="form-input" type="text" [ngModel]="mysqlUser()" (ngModelChange)="mysqlUser.set($event)">
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" style="font-size: 0.75rem;">Password</label>
+                <input class="form-input" type="password" [ngModel]="mysqlPassword()" (ngModelChange)="mysqlPassword.set($event)">
+              </div>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" style="font-size: 0.75rem;">Database Name</label>
+              <input class="form-input" type="text" [ngModel]="mysqlDatabase()" (ngModelChange)="mysqlDatabase.set($event)">
+            </div>
+          </div>
+        }
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
           <div class="form-group">

@@ -190,7 +190,7 @@ async Task<string> ExecutePsqlQueryAsync(string query, string postgresUri)
     }
 }
 
-// Helper to translate virtual UI folder paths to host paths safely (preventing directory traversal)
+// Helper to translate virtual UI folder paths to host paths safely (preventing directory traversal and mapping to the active project subfolder)
 string ResolveVirtualPath(string filename, string workspacePath)
 {
     filename = filename.TrimStart('/');
@@ -199,24 +199,16 @@ string ResolveVirtualPath(string filename, string workspacePath)
         filename = filename.Substring("my_mage_project/".Length);
     }
     
-    string targetPath;
-    if (filename.StartsWith("bronze/"))
-    {
-        targetPath = Path.Combine(workspacePath, "bronze", Path.GetFileName(filename));
-    }
-    else if (filename.StartsWith("silver/"))
-    {
-        targetPath = Path.Combine(workspacePath, "silver", Path.GetFileName(filename));
-    }
-    else if (filename.StartsWith("gold/"))
-    {
-        targetPath = Path.Combine(workspacePath, "gold", Path.GetFileName(filename));
-    }
-    else
-    {
-        targetPath = Path.Combine(workspacePath, filename);
-    }
+    var config = GetConfig();
+    string projFolder = config.ProjectName.ToLower().Replace(" ", "_");
     
+    // Automatically prepend the active project subfolder if it is not already in the path
+    if (!filename.StartsWith(projFolder + "/", StringComparison.OrdinalIgnoreCase))
+    {
+        filename = Path.Combine(projFolder, filename);
+    }
+
+    string targetPath = Path.Combine(workspacePath, filename);
     string fullTargetPath = Path.GetFullPath(targetPath);
     string fullWorkspacePath = Path.GetFullPath(workspacePath);
     
@@ -295,6 +287,20 @@ app.MapPost("/api/project/initialize", async ([FromBody] InitProjectPayload payl
     config.ProjectName = payload.ProjectName;
     SaveConfig(config);
 
+    // Physically create medallion directories on disk under the new project subfolder
+    try
+    {
+        string projDir = Path.Combine(config.WorkspacePath, proj);
+        Directory.CreateDirectory(Path.Combine(projDir, "bronze"));
+        Directory.CreateDirectory(Path.Combine(projDir, "silver"));
+        Directory.CreateDirectory(Path.Combine(projDir, "gold"));
+        Directory.CreateDirectory(Path.Combine(projDir, "dbt"));
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error creating project directories: {ex.Message}");
+    }
+
     string sql = $@"
         CREATE SCHEMA IF NOT EXISTS {proj}_bronze;
         CREATE SCHEMA IF NOT EXISTS {proj}_silver;
@@ -302,12 +308,31 @@ app.MapPost("/api/project/initialize", async ([FromBody] InitProjectPayload payl
     ";
 
     string result = await ExecutePsqlQueryAsync(sql, config.PostgresUri);
-    return Results.Json(new { status = "success", message = $"Project schemas {proj}_bronze, {proj}_silver, and {proj}_gold initialized in PostgreSQL.", sqlResult = result });
+    return Results.Json(new { status = "success", message = $"Project schemas {proj}_bronze, {proj}_silver, and {proj}_gold initialized in PostgreSQL, and medallion directories created on disk.", sqlResult = result });
 });
 
 // ==========================================
 // WORKSPACE FILE EXPLORER ENDPOINTS
 // ==========================================
+
+// Get list of project subfolders present in the workspace
+app.MapGet("/api/workspace/projects", () => {
+    var config = GetConfig();
+    string path = config.WorkspacePath;
+    var list = new List<string>();
+    
+    if (Directory.Exists(path))
+    {
+        foreach (var dir in Directory.GetDirectories(path))
+        {
+            var dirName = Path.GetFileName(dir);
+            if (dirName.StartsWith(".") || dirName == "node_modules" || dirName == "obj" || dirName == "bin" || dirName == "target" || dirName == "logs" || dirName == "dbt") 
+                continue;
+            list.Add(dirName);
+        }
+    }
+    return Results.Json(list);
+});
 
 app.MapGet("/api/workspace/files", () => {
     var config = GetConfig();
@@ -320,7 +345,6 @@ app.MapGet("/api/workspace/files", () => {
                 type = "directory",
                 isOpen = true,
                 children = new object[] {
-                    new { name = "ingest_mongodb.py", type = "file", language = "python" },
                     new { name = "bronze", type = "directory", children = new object[] {} },
                     new { name = "silver", type = "directory", children = new object[] {} },
                     new { name = "gold", type = "directory", children = new object[] {} }
@@ -329,31 +353,64 @@ app.MapGet("/api/workspace/files", () => {
         });
     }
 
-    // Build virtualized folder tree structure
-    var children = new List<object>();
+    string projFolder = config.ProjectName.ToLower().Replace(" ", "_");
+    string activeProjectPath = Path.Combine(path, projFolder);
 
-    // 1. Root python scripts
-    foreach (var file in Directory.GetFiles(path))
+    // If the active project directory doesn't exist on disk, materialize it dynamically to enforce strict scoping
+    if (!Directory.Exists(activeProjectPath))
     {
-        var name = Path.GetFileName(file);
-        if (name.StartsWith(".") || !name.EndsWith(".py")) continue;
-        children.Add(new { name, type = "file", language = "python" });
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(activeProjectPath, "bronze"));
+            Directory.CreateDirectory(Path.Combine(activeProjectPath, "silver"));
+            Directory.CreateDirectory(Path.Combine(activeProjectPath, "gold"));
+            Directory.CreateDirectory(Path.Combine(activeProjectPath, "dbt"));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating missing project directories: {ex.Message}");
+        }
     }
 
-    // 2. Bronze
-    string bronzePath = Path.Combine(path, "bronze");
-    var bronzeList = ScanFilesRecursive(bronzePath, "bronze");
-    children.Add(new { name = "bronze", type = "directory", isOpen = true, children = bronzeList });
+    string scanPath = activeProjectPath;
 
-    // 3. Silver
-    string silverPath = Path.Combine(path, "silver");
-    var silverList = ScanFilesRecursive(silverPath, "silver");
-    children.Add(new { name = "silver", type = "directory", isOpen = true, children = silverList });
+    // Build virtualized folder tree structure under the selected project
+    var children = new List<object>();
 
-    // 4. Gold
-    string goldPath = Path.Combine(path, "gold");
-    var goldList = ScanFilesRecursive(goldPath, "gold");
-    children.Add(new { name = "gold", type = "directory", isOpen = true, children = goldList });
+    if (Directory.Exists(scanPath))
+    {
+        // 1. Root python scripts inside the project folder
+        foreach (var file in Directory.GetFiles(scanPath))
+        {
+            var name = Path.GetFileName(file);
+            if (name.StartsWith(".") || !name.EndsWith(".py")) continue;
+            children.Add(new { name, type = "file", language = "python" });
+        }
+
+        // 2. Project folders (bronze, silver, gold, dbt) inside the project folder
+        foreach (var dir in Directory.GetDirectories(scanPath))
+        {
+            var dirName = Path.GetFileName(dir);
+            if (dirName.StartsWith(".") || dirName == "node_modules" || dirName == "obj" || dirName == "bin" || dirName == "target" || dirName == "logs") 
+                continue;
+
+            var dirList = ScanFilesRecursive(dir, dirName);
+            children.Add(new { 
+                name = dirName, 
+                type = "directory", 
+                isOpen = true, 
+                children = dirList 
+            });
+        }
+    }
+
+    var projectFolderNode = new
+    {
+        name = projFolder,
+        type = "directory",
+        isOpen = true,
+        children = children.ToArray()
+    };
 
     var tree = new[]
     {
@@ -362,7 +419,7 @@ app.MapGet("/api/workspace/files", () => {
             name = "my_mage_project",
             type = "directory",
             isOpen = true,
-            children = children.ToArray()
+            children = new object[] { projectFolderNode }
         }
     };
     return Results.Json(tree);
@@ -522,35 +579,50 @@ app.MapPost("/api/workspace/execute", async ([FromBody] ExecutePayload payload) 
             if (config.ExecutionMode == "docker")
             {
                 // Run inside the Mage docker container
-                string subfolder = "";
-                if (fileName.Contains("bronze/")) subfolder = "bronze/";
-                else if (fileName.Contains("silver/")) subfolder = "silver/";
-                else if (fileName.Contains("gold/")) subfolder = "gold/";
-                
-                string containerFile = $"/home/src/my_mage_project/{subfolder}{Path.GetFileName(fileName)}";
+                string cleanFileName = fileName.TrimStart('/');
+                if (cleanFileName.StartsWith("my_mage_project/"))
+                {
+                    cleanFileName = cleanFileName.Substring("my_mage_project/".Length);
+                }
+                string containerFile = $"/home/src/my_mage_project/{cleanFileName}";
                 
                 // First, write the latest code to the host directory (which syncs to the container)
                 string hostPath = ResolveVirtualPath(fileName, config.WorkspacePath);
                 Directory.CreateDirectory(Path.GetDirectoryName(hostPath)!);
                 File.WriteAllText(hostPath, code);
 
-                // Mirror to dbt models folder for dbt compilation/run
-                if (fileName.Contains("silver/") || fileName.Contains("gold/"))
+                // Parse project name if the path is nested (e.g. "expendsave/silver/stg_users.sql")
+                string projName = "";
+                var parts = cleanFileName.Split('/');
+                if (parts.Length > 1)
                 {
-                    string dbtSubfolder = fileName.Contains("silver/") ? "silver" : "gold";
-                    string dbtPath = Path.Combine(config.WorkspacePath, "dbt", "models", dbtSubfolder, Path.GetFileName(fileName));
+                    projName = parts[0];
+                }
+
+                // Mirror to dbt models folder for dbt compilation/run
+                if (cleanFileName.Contains("/silver/") || cleanFileName.Contains("/gold/"))
+                {
+                    string dbtSubfolder = cleanFileName.Contains("/silver/") ? "silver" : "gold";
+                    // If nested under project, save under project's dbt directory
+                    string dbtPath = string.IsNullOrEmpty(projName)
+                        ? Path.Combine(config.WorkspacePath, "dbt", "models", dbtSubfolder, Path.GetFileName(cleanFileName))
+                        : Path.Combine(config.WorkspacePath, projName, "dbt", "models", dbtSubfolder, Path.GetFileName(cleanFileName));
+                    
                     Directory.CreateDirectory(Path.GetDirectoryName(dbtPath)!);
                     File.WriteAllText(dbtPath, code);
                 }
 
                 process.StartInfo.FileName = "docker";
                 
-                if (fileName.Contains("silver/") || fileName.Contains("gold/"))
+                if (cleanFileName.Contains("/silver/") || cleanFileName.Contains("/gold/"))
                 {
                     // DBT runs inside container
-                    string modelName = Path.GetFileNameWithoutExtension(fileName);
+                    string modelName = Path.GetFileNameWithoutExtension(cleanFileName);
                     logs.AppendLine($"[{DateTime.Now:HH:mm:ss}] [INFO] Triggering dbt compile and run for model '{modelName}'...");
-                    process.StartInfo.Arguments = $"exec -e DB_HOST=host.docker.internal -w /home/src/my_mage_project/dbt {config.DockerContainerName} dbt run --select {modelName}";
+                    string dbtWorkingDir = string.IsNullOrEmpty(projName)
+                        ? "/home/src/my_mage_project/dbt"
+                        : $"/home/src/my_mage_project/{projName}/dbt";
+                    process.StartInfo.Arguments = $"exec -e DB_HOST=host.docker.internal -w {dbtWorkingDir} {config.DockerContainerName} dbt run --select {modelName}";
                 }
                 else
                 {
@@ -568,12 +640,28 @@ app.MapPost("/api/workspace/execute", async ([FromBody] ExecutePayload payload) 
                 string hostPath = ResolveVirtualPath(fileName, config.WorkspacePath);
                 File.WriteAllText(hostPath, code);
 
-                if (fileName.Contains("silver/") || fileName.Contains("gold/"))
+                string cleanFileName = fileName.TrimStart('/');
+                if (cleanFileName.StartsWith("my_mage_project/"))
                 {
-                    string modelName = Path.GetFileNameWithoutExtension(fileName);
+                    cleanFileName = cleanFileName.Substring("my_mage_project/".Length);
+                }
+                
+                string projName = "";
+                var parts = cleanFileName.Split('/');
+                if (parts.Length > 1)
+                {
+                    projName = parts[0];
+                }
+
+                if (cleanFileName.Contains("/silver/") || cleanFileName.Contains("/gold/"))
+                {
+                    string modelName = Path.GetFileNameWithoutExtension(cleanFileName);
                     process.StartInfo.FileName = "dbt";
                     process.StartInfo.Arguments = $"run --select {modelName}";
-                    process.StartInfo.WorkingDirectory = Path.Combine(config.WorkspacePath, "dbt");
+                    string dbtLocalDir = string.IsNullOrEmpty(projName)
+                        ? Path.Combine(config.WorkspacePath, "dbt")
+                        : Path.Combine(config.WorkspacePath, projName, "dbt");
+                    process.StartInfo.WorkingDirectory = dbtLocalDir;
                 }
                 else
                 {
@@ -664,7 +752,7 @@ app.MapPost("/api/workspace/preview", async ([FromBody] PreviewTablePayload payl
 app.MapPost("/api/ingest/initialize", ([FromBody] IngestInitializePayload payload) => {
     var config = GetConfig();
     string proj = config.ProjectName.ToLower().Replace(" ", "_");
-    string fileName = $"bronze/ingest_{payload.SourceType}_{payload.TableName}.py";
+    string fileName = $"{proj}/bronze/ingest_{payload.SourceType}_{payload.TableName}.py";
     string filePath = ResolveVirtualPath(fileName, config.WorkspacePath);
     
     try
@@ -742,9 +830,14 @@ app.MapGet("/api/pipelines", async (IHttpClientFactory clientFactory) => {
     
     if (Directory.Exists(config.WorkspacePath))
     {
-        var bronzePath = Path.Combine(config.WorkspacePath, "bronze");
-        var silverPath = Path.Combine(config.WorkspacePath, "silver");
-        var goldPath = Path.Combine(config.WorkspacePath, "gold");
+        string projFolder = config.ProjectName.ToLower().Replace(" ", "_");
+        string projWorkspacePath = Path.Combine(config.WorkspacePath, projFolder);
+        
+        string baseDir = Directory.Exists(projWorkspacePath) ? projWorkspacePath : config.WorkspacePath;
+        
+        var bronzePath = Path.Combine(baseDir, "bronze");
+        var silverPath = Path.Combine(baseDir, "silver");
+        var goldPath = Path.Combine(baseDir, "gold");
         
         var bronzeFiles = new List<string>();
         var silverFiles = new List<string>();
@@ -767,9 +860,13 @@ app.MapGet("/api/pipelines", async (IHttpClientFactory clientFactory) => {
             }
         }
         
-        CollectFiles(bronzePath, "bronze", bronzeFiles);
-        CollectFiles(silverPath, "silver", silverFiles);
-        CollectFiles(goldPath, "gold", goldFiles);
+        string relativeBronzeBase = Directory.Exists(projWorkspacePath) ? $"{projFolder}/bronze" : "bronze";
+        string relativeSilverBase = Directory.Exists(projWorkspacePath) ? $"{projFolder}/silver" : "silver";
+        string relativeGoldBase = Directory.Exists(projWorkspacePath) ? $"{projFolder}/gold" : "gold";
+        
+        CollectFiles(bronzePath, relativeBronzeBase, bronzeFiles);
+        CollectFiles(silverPath, relativeSilverBase, silverFiles);
+        CollectFiles(goldPath, relativeGoldBase, goldFiles);
         
         var bronzeUuids = new List<string>();
         var silverUuids = new List<string>();
@@ -786,7 +883,7 @@ app.MapGet("/api/pipelines", async (IHttpClientFactory clientFactory) => {
                 name = $"Load {uuid}",
                 type = "data_loader",
                 language = fileRel.EndsWith(".py") ? "python" : "sql",
-                filePath = $"bronze/{fileName}",
+                filePath = fileRel.Replace("\\", "/"),
                 upstream_blocks = new string[] {}
             });
         }
@@ -798,7 +895,6 @@ app.MapGet("/api/pipelines", async (IHttpClientFactory clientFactory) => {
             var uuid = Path.GetFileNameWithoutExtension(fileRel);
             silverUuids.Add(uuid);
             
-            // Try to match upstream: find bronze uuids that match the name of the silver file using normalized name
             var normSilver = NormalizeBlockName(uuid);
             var upstreams = bronzeUuids
                 .Where(b => {
@@ -817,7 +913,7 @@ app.MapGet("/api/pipelines", async (IHttpClientFactory clientFactory) => {
                 name = $"Transform {uuid}",
                 type = "transformer",
                 language = fileRel.EndsWith(".py") ? "python" : "sql",
-                filePath = $"silver/{fileName}",
+                filePath = fileRel.Replace("\\", "/"),
                 upstream_blocks = upstreams
             });
         }
@@ -828,7 +924,6 @@ app.MapGet("/api/pipelines", async (IHttpClientFactory clientFactory) => {
             var fileName = Path.GetFileName(fileRel);
             var uuid = Path.GetFileNameWithoutExtension(fileRel);
             
-            // Try to match upstream: find silver uuids that match using normalized name
             var normGold = NormalizeBlockName(uuid);
             var upstreams = silverUuids
                 .Where(s => {
@@ -847,7 +942,7 @@ app.MapGet("/api/pipelines", async (IHttpClientFactory clientFactory) => {
                 name = $"Aggregate {uuid}",
                 type = "data_exporter",
                 language = fileRel.EndsWith(".py") ? "python" : "sql",
-                filePath = $"gold/{fileName}",
+                filePath = fileRel.Replace("\\", "/"),
                 upstream_blocks = upstreams
             });
         }

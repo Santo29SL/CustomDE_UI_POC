@@ -164,11 +164,16 @@
         <div class="notebook-container">
           <!-- File Browser -->
           <div class="file-browser">
-            <div class="browser-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="browser-header" style="display: flex; justify-content: space-between; align-items: center; gap: 0.25rem;">
               <span>Workspace Project</span>
-              <button class="btn btn-secondary" style="padding: 0.15rem 0.4rem; font-size: 0.7rem; font-weight: 500;" (click)="createNewFilePrompt()">
-                ➕ New File
-              </button>
+              <div style="display: flex; gap: 0.25rem;">
+                <button class="btn btn-secondary" style="padding: 0.15rem 0.4rem; font-size: 0.7rem; font-weight: 500;" (click)="initializeProjectSchema()">
+                  ➕ New Project
+                </button>
+                <button class="btn btn-secondary" style="padding: 0.15rem 0.4rem; font-size: 0.7rem; font-weight: 500;" (click)="createNewFilePrompt()">
+                  ➕ New File
+                </button>
+              </div>
             </div>
             @for (rootNode of fileTree(); track rootNode.name) {
               <div>
@@ -178,25 +183,48 @@
                 @if (rootNode.isOpen && rootNode.children) {
                   <div class="tree-children">
                     @for (child of rootNode.children; track child.name) {
+                      <!-- Level 1: Active Project Folder (e.g. healthcare, es) -->
                       @if (child.children) {
                         <div class="tree-node" style="font-weight: 500;" (click)="child.isOpen = !child.isOpen">
                           📁 {{ child.name }}
                         </div>
                         @if (child.isOpen) {
-                          <div class="tree-children">
+                          <div class="tree-children" style="margin-left: 0.75rem;">
                             @for (subchild of child.children; track subchild.name) {
-                              <div class="tree-node file-tree-item" [class.selected]="selectedFilePath() === 'my_mage_project/' + child.name + '/' + subchild.name" (click)="selectFileNode('my_mage_project/' + child.name + '/' + subchild.name, subchild)">
-                                <span class="file-name-text">📄 {{ subchild.name }}</span>
-                                <span class="file-actions" (click)="$event.stopPropagation()">
-                                  <button class="file-action-btn" (click)="renameFilePrompt('my_mage_project/' + child.name + '/' + subchild.name)" title="Rename File">✏️</button>
-                                  <button class="file-action-btn" (click)="deleteFilePrompt('my_mage_project/' + child.name + '/' + subchild.name)" title="Delete File">🗑️</button>
-                                </span>
-                              </div>
-
+                              <!-- Level 2: Medallion layer folder (e.g. bronze) or root-level scripts -->
+                              @if (subchild.children) {
+                                <div class="tree-node" style="font-weight: 500; color: var(--text-secondary);" (click)="subchild.isOpen = !subchild.isOpen">
+                                  📁 {{ subchild.name }}
+                                </div>
+                                @if (subchild.isOpen) {
+                                  <div class="tree-children" style="margin-left: 0.75rem;">
+                                    @for (fileNode of subchild.children; track fileNode.name) {
+                                      <!-- Level 3: Files inside layers -->
+                                      <div class="tree-node file-tree-item" [class.selected]="selectedFilePath() === 'my_mage_project/' + child.name + '/' + subchild.name + '/' + fileNode.name" (click)="selectFileNode('my_mage_project/' + child.name + '/' + subchild.name + '/' + fileNode.name, fileNode)">
+                                        <span class="file-name-text">📄 {{ fileNode.name }}</span>
+                                        <span class="file-actions" (click)="$event.stopPropagation()">
+                                          <button class="file-action-btn" (click)="renameFilePrompt('my_mage_project/' + child.name + '/' + subchild.name + '/' + fileNode.name)" title="Rename File">✏️</button>
+                                          <button class="file-action-btn" (click)="deleteFilePrompt('my_mage_project/' + child.name + '/' + subchild.name + '/' + fileNode.name)" title="Delete File">🗑️</button>
+                                        </span>
+                                      </div>
+                                    }
+                                  </div>
+                                }
+                              } @else {
+                                <!-- Root scripts inside active project folder -->
+                                <div class="tree-node file-tree-item" [class.selected]="selectedFilePath() === 'my_mage_project/' + child.name + '/' + subchild.name" (click)="selectFileNode('my_mage_project/' + child.name + '/' + subchild.name, subchild)">
+                                  <span class="file-name-text">📄 {{ subchild.name }}</span>
+                                  <span class="file-actions" (click)="$event.stopPropagation()">
+                                    <button class="file-action-btn" (click)="renameFilePrompt('my_mage_project/' + child.name + '/' + subchild.name)" title="Rename File">✏️</button>
+                                    <button class="file-action-btn" (click)="deleteFilePrompt('my_mage_project/' + child.name + '/' + subchild.name)" title="Delete File">🗑️</button>
+                                  </span>
+                                </div>
+                              }
                             }
                           </div>
                         }
                       } @else {
+                        <!-- Root scripts at my_mage_project root (fallback) -->
                         <div class="tree-node file-tree-item" [class.selected]="selectedFilePath() === 'my_mage_project/' + child.name" (click)="selectFileNode('my_mage_project/' + child.name, child)">
                           <span class="file-name-text">📄 {{ child.name }}</span>
                           <span class="file-actions" (click)="$event.stopPropagation()">
@@ -204,7 +232,6 @@
                             <button class="file-action-btn" (click)="deleteFilePrompt('my_mage_project/' + child.name)" title="Delete File">🗑️</button>
                           </span>
                         </div>
-
                       }
                     }
                   </div>
@@ -602,6 +629,58 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" (click)="settingsModalOpen.set(false)">Cancel</button>
         <button class="btn btn-primary" (click)="saveSettings()">Save Configuration</button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Initialize Project Modal -->
+@if (projectModalOpen()) {
+  <div class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 style="font-weight: 700; color: var(--text-primary);">📁 Initialize Project Schema & Folder</h3>
+        <button class="btn btn-secondary" style="padding: 0.2rem 0.5rem; font-size: 0.8rem;" (click)="projectModalOpen.set(false)">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1.25rem;">
+          Define the target schema and directory for this project. This will initialize the project's folder structure (`bronze/`, `silver/`, `gold/`, `dbt/`) on disk and database schemas.
+        </p>
+
+        <div class="form-group" style="display: flex; gap: 1.5rem; margin-bottom: 1.25rem;">
+          <label style="display: flex; align-items: center; gap: 0.5rem; color: var(--text-primary); font-size: 0.9rem; cursor: pointer;">
+            <input type="radio" name="projectInitMode" value="new" [ngModel]="projectInitMode()" (ngModelChange)="projectInitMode.set($event)"> Create a new project folder
+          </label>
+          <label style="display: flex; align-items: center; gap: 0.5rem; color: var(--text-primary); font-size: 0.9rem; cursor: pointer;">
+            <input type="radio" name="projectInitMode" value="existing" [ngModel]="projectInitMode()" (ngModelChange)="projectInitMode.set($event)"> Use an existing project folder
+          </label>
+        </div>
+
+        @if (projectInitMode() === 'new') {
+          <div class="form-group">
+            <label class="form-label">New Project Folder Name</label>
+            <input class="form-input" type="text" [ngModel]="newProjectName()" (ngModelChange)="newProjectName.set($event)" placeholder="e.g. ecom_store">
+          </div>
+        } @else {
+          <div class="form-group">
+            <label class="form-label">Select Existing Project Folder</label>
+            @if (existingProjects().length > 0) {
+              <select class="form-select" [ngModel]="selectedExistingProject()" (ngModelChange)="selectedExistingProject.set($event)">
+                @for (proj of existingProjects(); track proj) {
+                  <option [value]="proj">{{ proj }}</option>
+                }
+              </select>
+            } @else {
+              <div style="font-size: 0.85rem; color: var(--text-secondary); border: 1px dashed var(--border-subtle); padding: 0.75rem; border-radius: 4px; text-align: center;">
+                No existing project directories found in the workspace.
+              </div>
+            }
+          </div>
+        }
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="projectModalOpen.set(false)">Cancel</button>
+        <button class="btn btn-primary" (click)="submitProjectInitialization()">Initialize Project</button>
       </div>
     </div>
   </div>

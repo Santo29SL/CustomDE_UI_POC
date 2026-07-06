@@ -88,16 +88,16 @@ ConfigModel GetConfig()
         var config = JsonSerializer.Deserialize<ConfigModel>(json) ?? new ConfigModel();
         
         // Always prefill common Mage credentials if missing
-        if (string.IsNullOrEmpty(config.MageUrl)) config.MageUrl = "http://localhost:6789/api";
-        if (string.IsNullOrEmpty(config.MageApiKey)) config.MageApiKey = "zkWlN0PkIKSN0C11CfUHUj84OT5XOJ6tDZ6bDRO2";
+        if (string.IsNullOrEmpty(config.MageUrl)) config.MageUrl = Environment.GetEnvironmentVariable("MAGE_URL") ?? "http://localhost:6789/api";
+        if (string.IsNullOrEmpty(config.MageApiKey)) config.MageApiKey = Environment.GetEnvironmentVariable("MAGE_API_KEY") ?? "";
         
         return config;
     }
     catch
     {
         var defaults = new ConfigModel();
-        defaults.MageUrl = "http://localhost:6789/api";
-        defaults.MageApiKey = "zkWlN0PkIKSN0C11CfUHUj84OT5XOJ6tDZ6bDRO2";
+        defaults.MageUrl = Environment.GetEnvironmentVariable("MAGE_URL") ?? "http://localhost:6789/api";
+        defaults.MageApiKey = Environment.GetEnvironmentVariable("MAGE_API_KEY") ?? "";
         return defaults;
     }
 }

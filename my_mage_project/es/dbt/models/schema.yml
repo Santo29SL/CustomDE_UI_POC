@@ -1,0 +1,18 @@
+version: 2
+
+sources:
+  - name: bronze
+    database: slinventoryDB
+    schema: bronze
+    description: "Raw staging data ingested from MongoDB collections"
+    tables:
+      - name: users
+        description: "Raw users collection"
+      - name: products
+        description: "Raw products collection"
+      - name: orders
+        description: "Raw orders collection"
+      - name: stocklogs
+        description: "Raw stock logs collection"
+      - name: restocks
+        description: "Raw restock requests collection"

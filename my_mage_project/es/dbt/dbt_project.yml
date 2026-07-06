@@ -1,0 +1,32 @@
+name: 'inventory_dbt'
+version: '1.0.0'
+config-version: 2
+
+# Link to the connection profile
+profile: 'inventory_dbt'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# Configure the target database schemas and materializations
+models:
+  inventory_dbt:
+    # Silver conformed models
+    silver:
+      +schema: silver
+      +materialized: table
+      +tags: ["silver"]
+    
+    # Gold aggregated models
+    gold:
+      +schema: gold
+      +materialized: table
+      +tags: ["gold"]

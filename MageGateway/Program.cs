@@ -785,6 +785,57 @@ app.MapDelete("/api/workspace/postgres-table", async (string schemaName, string 
 // INGESTION SCRIPT INITIALIZER
 // ==========================================
 
+app.MapPost("/api/ingest/upload", async (HttpRequest request) => {
+    if (!request.HasFormContentType)
+    {
+        return Results.BadRequest(new { status = "error", message = "Request must be a form upload." });
+    }
+
+    var form = await request.ReadFormAsync();
+    var file = form.Files.GetFile("file");
+    var tableName = form["tableName"].ToString();
+    
+    if (file == null || file.Length == 0)
+    {
+        return Results.BadRequest(new { status = "error", message = "No file uploaded." });
+    }
+    
+    if (string.IsNullOrEmpty(tableName))
+    {
+        return Results.BadRequest(new { status = "error", message = "Table name is required." });
+    }
+
+    var config = GetConfig();
+    string proj = config.ProjectName.ToLower().Replace(" ", "_");
+    
+    string fileExt = Path.GetExtension(file.FileName).ToLower();
+    if (fileExt != ".csv" && fileExt != ".parquet")
+    {
+        return Results.BadRequest(new { status = "error", message = "Only .csv and .parquet files are supported." });
+    }
+
+    // Save under: my_mage_project/{projectName}/bronze/data/{tableName}{fileExt}
+    string relativeDataDir = Path.Combine(proj, "bronze", "data");
+    string hostDataDir = Path.Combine(config.WorkspacePath, relativeDataDir);
+    
+    if (!Directory.Exists(hostDataDir))
+    {
+        Directory.CreateDirectory(hostDataDir);
+    }
+    
+    string hostFilePath = Path.Combine(hostDataDir, $"{tableName}{fileExt}");
+    using (var stream = new FileStream(hostFilePath, FileMode.Create))
+    {
+        await file.CopyToAsync(stream);
+    }
+
+    return Results.Json(new { 
+        status = "success", 
+        filePath = hostFilePath,
+        fileExtension = fileExt
+    });
+});
+
 app.MapPost("/api/ingest/initialize", ([FromBody] IngestInitializePayload payload) => {
     var config = GetConfig();
     string proj = config.ProjectName.ToLower().Replace(" ", "_");
@@ -809,6 +860,21 @@ app.MapPost("/api/ingest/initialize", ([FromBody] IngestInitializePayload payloa
                 .Replace("{POSTGRES_URI}", config.PostgresUri)
                 .Replace("{PROJECT}", proj)
                 .Replace("{TABLE_NAME}", payload.TableName);
+        }
+        else if (payload.SourceType == "localfile")
+        {
+            string fileExt = payload.FileExtension ?? ".csv";
+            string relativeFile = $"{proj}/bronze/data/{payload.TableName}{fileExt}";
+            string hostFilePath = ResolveVirtualPath(relativeFile, config.WorkspacePath);
+            string containerFilePath = $"/home/src/my_mage_project/{proj}/bronze/data/{payload.TableName}{fileExt}";
+
+            pythonCode = template
+                .Replace("{POSTGRES_URI}", config.PostgresUri)
+                .Replace("{PROJECT}", proj)
+                .Replace("{TABLE_NAME}", payload.TableName)
+                .Replace("{FILE_PATH_HOST}", hostFilePath)
+                .Replace("{FILE_PATH_CONTAINER}", containerFilePath)
+                .Replace("{FILE_EXTENSION}", fileExt);
         }
         else
         {
@@ -1074,6 +1140,6 @@ public record InitProjectPayload(string ProjectName);
 public record ExecutePayload(string FileName, string Code, string Language);
 public record WritePayload(string Filename, string Code);
 public record PreviewTablePayload(string SchemaName, string TableName);
-public record IngestInitializePayload(string SourceType, string TableName);
+public record IngestInitializePayload(string SourceType, string TableName, string? FileExtension = null);
 public record RenamePayload(string OldFilename, string NewFilename);
 

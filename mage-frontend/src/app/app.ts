@@ -62,6 +62,8 @@ export class App implements OnInit, OnDestroy {
   readonly ingesting = signal<boolean>(false);
   readonly ingestionProgress = signal<number>(0);
   readonly ingestionLogs = signal<string[]>([]);
+  readonly selectedFile = signal<File | null>(null);
+  readonly selectedFileSizeStr = signal<string>('');
 
   // Notebook editor signals
   readonly fileTree = signal<FileNode[]>([]);
@@ -265,7 +267,25 @@ export class App implements OnInit, OnDestroy {
 
   selectSourceType(type: string) {
     this.selectedSourceType.set(type);
-    alert(`Please check your settings configuration to ensure your connection details are correct for ${type === 'mongodb' ? 'MongoDB' : 'MySQL'}.`);
+    if (type !== 'localfile') {
+      alert(`Please check your settings configuration to ensure your connection details are correct for ${type === 'mongodb' ? 'MongoDB' : 'MySQL'}.`);
+    }
+  }
+
+  onFileSelected(event: any) {
+    const file = event.target.files?.[0];
+    if (file) {
+      this.selectedFile.set(file);
+      const sizeKB = (file.size / 1024).toFixed(2);
+      this.selectedFileSizeStr.set(`${sizeKB} KB`);
+      
+      const baseName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+      const cleanTableName = baseName.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+      this.ingestTableName.set(cleanTableName);
+    } else {
+      this.selectedFile.set(null);
+      this.selectedFileSizeStr.set('');
+    }
   }
 
   // ==========================================
@@ -338,54 +358,143 @@ export class App implements OnInit, OnDestroy {
       return;
     }
 
+    if (this.selectedSourceType() === 'localfile' && !this.selectedFile()) {
+      alert("Please select a CSV or Parquet file to upload.");
+      return;
+    }
+
     // Auto-save the currently entered MySQL database details before generating the ingestion script
     this.saveSettingsSilently();
 
-    const payload = {
-      SourceType: this.selectedSourceType(),
-      TableName: table
-    };
-
     this.ingesting.set(true);
     this.ingestionProgress.set(0);
-    this.ingestionLogs.set(["[INFO] Generating Python ETL Ingestion code mapping for Medallion architecture..."]);
 
-    // Simulated progress increment
-    const interval = setInterval(() => {
-      const current = this.ingestionProgress();
-      if (current < 90) {
-        this.ingestionProgress.set(current + 15);
-      }
-    }, 100);
+    if (this.selectedSourceType() === 'localfile') {
+      this.ingestionLogs.set([
+        "[INFO] Starting manual file ingestion...",
+        `[INFO] Uploading file '${this.selectedFile()?.name}' to gateway backend...`
+      ]);
 
-    this.http.post<any>(`${this.gatewayUrl}/ingest/initialize`, payload).subscribe({
-      next: (res) => {
-        clearInterval(interval);
-        this.ingestionProgress.set(100);
-        setTimeout(() => {
-          this.ingesting.set(false);
-          this.ingestionProgress.set(0);
+      const file = this.selectedFile()!;
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('tableName', table);
+
+      // Simple progress simulation for upload
+      const interval = setInterval(() => {
+        const current = this.ingestionProgress();
+        if (current < 50) {
+          this.ingestionProgress.set(current + 10);
+        }
+      }, 100);
+
+      this.http.post<any>(`${this.gatewayUrl}/ingest/upload`, formData).subscribe({
+        next: (uploadRes) => {
+          clearInterval(interval);
+          this.ingestionProgress.set(50);
           this.ingestionLogs.update(logs => [
             ...logs,
-            `[SUCCESS] Python script initialized successfully: ${res.filename}`,
-            `[INFO] Directing to Notebook tab. Click 'Run Code' inside Monaco to start loading data.`
+            `[SUCCESS] File uploaded and saved to host path: ${uploadRes.filePath}`,
+            "[INFO] Creating Python ETL Ingestion code mapping for Medallion architecture..."
           ]);
-          
-          // Reload files tree and auto open this generated script
-          this.loadWorkspaceFiles();
-          this.setTab('notebook');
+
+          const initPayload = {
+            SourceType: 'localfile',
+            TableName: table,
+            FileExtension: uploadRes.fileExtension
+          };
+
+          const initInterval = setInterval(() => {
+            const current = this.ingestionProgress();
+            if (current < 95) {
+              this.ingestionProgress.set(current + 10);
+            }
+          }, 100);
+
+          this.http.post<any>(`${this.gatewayUrl}/ingest/initialize`, initPayload).subscribe({
+            next: (res) => {
+              clearInterval(initInterval);
+              this.ingestionProgress.set(100);
+              setTimeout(() => {
+                this.ingesting.set(false);
+                this.ingestionProgress.set(0);
+                this.selectedFile.set(null); // Clear selected file
+                this.selectedFileSizeStr.set('');
+                this.ingestionLogs.update(logs => [
+                  ...logs,
+                  `[SUCCESS] Python script initialized successfully: ${res.filename}`,
+                  `[INFO] Directing to Notebook tab. Click 'Run Code' inside Monaco to start loading data.`
+                ]);
+                
+                // Reload files tree and auto open this generated script
+                this.loadWorkspaceFiles();
+                this.setTab('notebook');
+                setTimeout(() => {
+                  this.openFileByPath(`my_mage_project/${res.filename}`);
+                }, 300);
+              }, 300);
+            },
+            error: (err) => {
+              clearInterval(initInterval);
+              this.ingesting.set(false);
+              this.ingestionProgress.set(0);
+              this.ingestionLogs.update(logs => [...logs, `[ERROR] Script generation failed: ${err.message}`]);
+            }
+          });
+        },
+        error: (err) => {
+          clearInterval(interval);
+          this.ingesting.set(false);
+          this.ingestionProgress.set(0);
+          this.ingestionLogs.update(logs => [...logs, `[ERROR] File upload failed: ${err.error?.message || err.message}`]);
+        }
+      });
+    } else {
+      // Original logic for mongodb and mysql
+      const payload = {
+        SourceType: this.selectedSourceType(),
+        TableName: table
+      };
+
+      this.ingestionLogs.set(["[INFO] Generating Python ETL Ingestion code mapping for Medallion architecture..."]);
+
+      // Simulated progress increment
+      const interval = setInterval(() => {
+        const current = this.ingestionProgress();
+        if (current < 90) {
+          this.ingestionProgress.set(current + 15);
+        }
+      }, 100);
+
+      this.http.post<any>(`${this.gatewayUrl}/ingest/initialize`, payload).subscribe({
+        next: (res) => {
+          clearInterval(interval);
+          this.ingestionProgress.set(100);
           setTimeout(() => {
-            this.openFileByPath(`my_mage_project/${res.filename}`);
+            this.ingesting.set(false);
+            this.ingestionProgress.set(0);
+            this.ingestionLogs.update(logs => [
+              ...logs,
+              `[SUCCESS] Python script initialized successfully: ${res.filename}`,
+              `[INFO] Directing to Notebook tab. Click 'Run Code' inside Monaco to start loading data.`
+            ]);
+            
+            // Reload files tree and auto open this generated script
+            this.loadWorkspaceFiles();
+            this.setTab('notebook');
+            setTimeout(() => {
+              this.openFileByPath(`my_mage_project/${res.filename}`);
+            }, 300);
           }, 300);
-        }, 300);
-      },
-      error: (err) => {
-        clearInterval(interval);
-        this.ingesting.set(false);
-        this.ingestionProgress.set(0);
-        this.ingestionLogs.update(logs => [...logs, `[ERROR] Script generation failed: ${err.message}`]);
-      }
-    });
+        },
+        error: (err) => {
+          clearInterval(interval);
+          this.ingesting.set(false);
+          this.ingestionProgress.set(0);
+          this.ingestionLogs.update(logs => [...logs, `[ERROR] Script generation failed: ${err.message}`]);
+        }
+      });
+    }
   }
 
   // ==========================================

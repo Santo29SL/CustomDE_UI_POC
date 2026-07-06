@@ -1,0 +1,17 @@
+DROP TABLE IF EXISTS expendsave_gold.fact_cash_flow_trend CASCADE;
+
+CREATE TABLE expendsave_gold.fact_cash_flow_trend AS
+SELECT 
+    t.user_id,
+    u.username,
+    t.transaction_date::DATE AS transaction_day,
+    -- Daily aggregates
+    SUM(CASE WHEN t.transaction_type = 'income' THEN t.amount ELSE 0.00 END) AS daily_income,
+    SUM(CASE WHEN t.transaction_type = 'expense' THEN t.amount ELSE 0.00 END) AS daily_expense,
+    -- Net daily cashflow
+    SUM(CASE WHEN t.transaction_type = 'income' THEN t.amount ELSE -t.amount END) AS net_daily_cashflow
+FROM expendsave_silver.stg_transactions t
+JOIN expendsave_silver.stg_users u ON t.user_id = u.user_id
+GROUP BY t.user_id, u.username, t.transaction_date::DATE;
+
+ALTER TABLE expendsave_gold.fact_cash_flow_trend ADD PRIMARY KEY (user_id, transaction_day);

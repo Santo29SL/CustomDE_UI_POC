@@ -1,0 +1,13 @@
+inventory_dbt:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('DB_HOST', 'localhost') }}"
+      port: 5432
+      user: postgres
+      password: postgres
+      dbname: slinventoryDB
+      schema: public # Overridden dynamically by macros for silver and gold
+      threads: 4
+      keepalives_idle: 0

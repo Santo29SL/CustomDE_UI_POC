@@ -997,3 +997,44 @@
   transform: scale(1.15);
 }
 
+/* Local File Upload Drop Zone */
+.file-drop-zone {
+  border: 2px dashed var(--border-subtle);
+  padding: 2rem 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  background-color: var(--bg-base);
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+
+.file-drop-zone:hover {
+  border-color: var(--accent-green);
+  background-color: rgba(16, 185, 129, 0.02);
+}
+
+.file-drop-zone.has-file {
+  border-color: var(--accent-green);
+  background-color: rgba(16, 185, 129, 0.05);
+}
+
+.drop-zone-text {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.drop-zone-text .browse-link {
+  color: var(--accent-green-light);
+  text-decoration: underline;
+  font-weight: 600;
+}
+
+.text-success {
+  color: var(--text-success) !important;
+}
+
+

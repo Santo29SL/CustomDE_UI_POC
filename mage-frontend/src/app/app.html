@@ -64,7 +64,7 @@
           <div class="glass-panel" style="display: flex; flex-direction: column; gap: 1.25rem;">
             <h3>Ingestion Data Source</h3>
             <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.5rem;">
-              Select a data source from your project website database (MongoDB local/Atlas, or local MySQL Workbench) to load into your custom PostgreSQL bronze staging layer.
+              Select a data source from your database (MongoDB, MySQL) or upload a local file (.csv, .parquet) to load into your custom PostgreSQL bronze staging layer.
             </p>
 
             <div class="source-selector-tabs">
@@ -73,6 +73,9 @@
               </div>
               <div class="source-tab" [class.active]="selectedSourceType() === 'mysql'" (click)="selectSourceType('mysql')">
                 🐬 MySQL Workbench
+              </div>
+              <div class="source-tab" [class.active]="selectedSourceType() === 'localfile'" (click)="selectSourceType('localfile')">
+                📁 Local File
               </div>
             </div>
 
@@ -114,6 +117,29 @@
                 <div class="form-group">
                   <label class="form-label">Table Name (Extract Source)</label>
                   <input class="form-input" type="text" [(ngModel)]="ingestTableName">
+                </div>
+              } @else if (selectedSourceType() === 'localfile') {
+                <div class="form-group">
+                  <label class="form-label">Upload File (.csv, .parquet)</label>
+                  <div class="file-drop-zone" [class.has-file]="selectedFile() !== null" (click)="fileInput.click()">
+                    <input #fileInput type="file" (change)="onFileSelected($event)" accept=".csv,.parquet" style="display: none;">
+                    @if (selectedFile() === null) {
+                      <div class="drop-zone-text">
+                        <span style="font-size: 1.5rem; margin-bottom: 0.25rem; display: block;">📤</span>
+                        <span>Drag & drop or <span class="browse-link">browse</span> your local file</span>
+                      </div>
+                    } @else {
+                      <div class="drop-zone-text text-success">
+                        <span style="font-size: 1.5rem; margin-bottom: 0.25rem; display: block;">📄</span>
+                        <strong>{{ selectedFile()?.name }}</strong>
+                        <span style="font-size: 0.75rem; color: var(--text-muted); display: block;">({{ selectedFileSizeStr() }})</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">PostgreSQL Target Table Name</label>
+                  <input class="form-input" type="text" [(ngModel)]="ingestTableName" placeholder="e.g. uploaded_inventory">
                 </div>
               }
 

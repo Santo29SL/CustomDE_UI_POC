@@ -47,7 +47,7 @@ export class App implements OnInit, OnDestroy {
   readonly mysqlPassword = signal<string>('password');
   readonly mysqlDatabase = signal<string>('mysqldb');
   readonly mageUrl = signal<string>('http://localhost:6789/api');
-  readonly mageApiKey = signal<string>('zkWlN0PkIKSN0C11CfUHUj84OT5XOJ6tDZ6bDRO2');
+  readonly mageApiKey = signal<string>('');
   readonly supersetUrl = signal<string>('http://localhost:8088/superset/dashboard/1/?standalone=true');
 
   readonly safeSupersetUrl = computed<SafeResourceUrl>(() => {
@@ -127,43 +127,7 @@ export class App implements OnInit, OnDestroy {
   readonly pipelineLogs = signal<string>('');
   newPipelineName = '';
 
-  // Mock fallbacks visualizer metrics (used when DB table list is empty)
-  readonly mockMetrics = signal<any>({ total_items: 2489, low_stock: 3, out_of_stock: 1, total_orders: 142, total_users: 75 });
-  readonly mockChartCategories = signal<any[]>([
-    { category: 'Mobile', value: 125000 },
-    { category: 'Accessories', value: 45000 },
-    { category: 'Electronics', value: 30000 },
-    { category: 'Home', value: 15000 },
-    { category: 'Laptops', value: 0 }
-  ]);
-  readonly mockChartSales = signal<any[]>([
-    { label: 'Mobile', value: 75000 },
-    { label: 'Laptops', value: 50000 },
-    { label: 'Home', value: 12000 },
-    { label: 'Accessories', value: 5000 }
-  ]);
-  readonly mockGridPreviewData = signal<any[]>([
-    { product_id: 'p1', product_name: 'iPhone 15 Pro', category: 'Mobile', current_stock: 45, reorder_level: 10, stock_status: 'HEALTHY', pending_restock_quantity: 0 },
-    { product_id: 'p2', product_name: 'USB-C Cable 1m', category: 'Accessories', current_stock: 4, reorder_level: 20, stock_status: 'LOW STOCK', pending_restock_quantity: 50 },
-    { product_id: 'p3', product_name: 'Dell XPS 13', category: 'Laptops', current_stock: 0, reorder_level: 5, stock_status: 'OUT OF STOCK', pending_restock_quantity: 20 }
-  ]);
 
-  // Analytical variables & calculations
-  readonly filteredGridData = computed(() => {
-    return this.mockGridPreviewData();
-  });
-
-  readonly filteredMetrics = computed(() => {
-    return this.mockMetrics();
-  });
-
-  readonly filteredChartCategories = computed(() => {
-    return this.mockChartCategories();
-  });
-
-  readonly filteredChartSales = computed(() => {
-    return this.mockChartSales();
-  });
 
   ngOnInit() {
     this.loadConfiguration();

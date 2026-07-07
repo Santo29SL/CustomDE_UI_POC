@@ -205,6 +205,75 @@ async Task<string> ExecutePsqlQueryAsync(string query, string postgresUri)
     }
 }
 
+async Task CheckAndCleanUpSchemasAsync(string projectFolder, ConfigModel config)
+{
+    try
+    {
+        string proj = projectFolder.ToLower().Replace(" ", "_");
+        
+        // 1. Count files in workspace directory under bronze, silver, gold
+        int fileCount = 0;
+        string[] layers = { "bronze", "silver", "gold" };
+        string projWorkspacePath = Path.Combine(config.WorkspacePath, proj);
+        
+        if (Directory.Exists(projWorkspacePath))
+        {
+            int GetNonHiddenFilesCount(string dirPath)
+            {
+                int count = 0;
+                foreach (var file in Directory.GetFiles(dirPath))
+                {
+                    var name = Path.GetFileName(file);
+                    if (name.StartsWith(".")) continue;
+                    count++;
+                }
+                foreach (var dir in Directory.GetDirectories(dirPath))
+                {
+                    count += GetNonHiddenFilesCount(dir);
+                }
+                return count;
+            }
+
+            foreach (var layer in layers)
+            {
+                string layerPath = Path.Combine(projWorkspacePath, layer);
+                if (Directory.Exists(layerPath))
+                {
+                    fileCount += GetNonHiddenFilesCount(layerPath);
+                }
+            }
+        }
+
+        // 2. Count tables in the database schemas
+        string countQuery = $@"
+            SELECT count(*)::int 
+            FROM information_schema.tables 
+            WHERE table_schema IN ('{proj}_bronze', '{proj}_silver', '{proj}_gold');
+        ";
+        string countStr = await ExecutePsqlQueryAsync(countQuery, config.PostgresUri);
+        int tableCount = 0;
+        int.TryParse(countStr, out tableCount);
+
+        Console.WriteLine($"[CleanUp Check] Project: {proj}, Table Count: {tableCount}, File Count: {fileCount}");
+
+        // 3. strictly delete if BOTH are 0
+        if (tableCount == 0 && fileCount == 0)
+        {
+            Console.WriteLine($"[CleanUp Check] Dropping schemas for project: {proj}");
+            string dropSql = $@"
+                DROP SCHEMA IF EXISTS {proj}_bronze CASCADE;
+                DROP SCHEMA IF EXISTS {proj}_silver CASCADE;
+                DROP SCHEMA IF EXISTS {proj}_gold CASCADE;
+            ";
+            await ExecutePsqlQueryAsync(dropSql, config.PostgresUri);
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error during project schemas cleanup: {ex.Message}");
+    }
+}
+
 // Helper to validate SQL schema/table identifiers to prevent SQL injection
 bool IsValidDbIdentifier(string name)
 {
@@ -490,7 +559,7 @@ app.MapPost("/api/workspace/file", ([FromBody] WritePayload payload) => {
 });
 
 // Delete file
-app.MapDelete("/api/workspace/file", ([FromQuery] string filename) => {
+app.MapDelete("/api/workspace/file", async ([FromQuery] string filename) => {
     try
     {
         var config = GetConfig();
@@ -499,6 +568,11 @@ app.MapDelete("/api/workspace/file", ([FromQuery] string filename) => {
         if (File.Exists(targetFile))
         {
             File.Delete(targetFile);
+            
+            // Trigger check for schemas cleanup
+            string projFolder = config.ProjectName.ToLower().Replace(" ", "_");
+            await CheckAndCleanUpSchemasAsync(projFolder, config);
+            
             return Results.Json(new { status = "success", message = $"Successfully deleted file: {filename}" });
         }
         return Results.NotFound(new { status = "error", message = $"File not found: {filename}" });
@@ -775,17 +849,7 @@ app.MapGet("/api/workspace/postgres-tables", async () => {
     string json = await ExecutePsqlQueryAsync(query, config.PostgresUri);
     if (string.IsNullOrEmpty(json) || json == "[]" || json == "[]\n")
     {
-        // Static mockup list if database schemas don't exist yet
-        return Results.Json(new[]
-        {
-            new { schemaName = $"{proj}_bronze", tableName = "users" },
-            new { schemaName = $"{proj}_bronze", tableName = "products" },
-            new { schemaName = $"{proj}_bronze", tableName = "orders" },
-            new { schemaName = $"{proj}_silver", tableName = "stg_users" },
-            new { schemaName = $"{proj}_silver", tableName = "stg_products" },
-            new { schemaName = $"{proj}_silver", tableName = "stg_orders" },
-            new { schemaName = $"{proj}_gold", tableName = "sales_aggregations" }
-        });
+        return Results.Json(new object[] {});
     }
     return Results.Content(json, "application/json");
 });
@@ -816,6 +880,11 @@ app.MapDelete("/api/workspace/postgres-table", async (string schemaName, string 
     try
     {
         await ExecutePsqlQueryAsync(sql, config.PostgresUri);
+        
+        // Trigger check for schemas cleanup
+        string projFolder = config.ProjectName.ToLower().Replace(" ", "_");
+        await CheckAndCleanUpSchemasAsync(projFolder, config);
+        
         return Results.Json(new { status = "success", message = $"Dropped table {schemaName}.{tableName} successfully." });
     }
     catch (Exception ex)

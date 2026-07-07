@@ -48,7 +48,7 @@ export class App implements OnInit, OnDestroy {
   readonly mysqlDatabase = signal<string>('mysqldb');
   readonly mageUrl = signal<string>('http://localhost:6789/api');
   readonly mageApiKey = signal<string>('zkWlN0PkIKSN0C11CfUHUj84OT5XOJ6tDZ6bDRO2');
-  readonly supersetUrl = signal<string>('');
+  readonly supersetUrl = signal<string>('http://localhost:8088/superset/dashboard/1/?standalone=true');
 
   readonly safeSupersetUrl = computed<SafeResourceUrl>(() => {
     const url = this.supersetUrl();
@@ -187,7 +187,7 @@ export class App implements OnInit, OnDestroy {
           this.mysqlDatabase.set(config.mysqlDatabase || 'mysqldb');
           this.mageUrl.set(config.mageUrl || '');
           this.mageApiKey.set(config.mageApiKey || '');
-          this.supersetUrl.set(config.supersetUrl || '');
+          this.supersetUrl.set(config.supersetUrl || 'http://localhost:8088/superset/dashboard/1/?standalone=true');
           
           // Once config is loaded, call secondary workspace queries
           this.loadWorkspaceFiles();

@@ -261,7 +261,7 @@ export class App implements OnInit, OnDestroy {
   setTab(tab: string) {
     this.currentTab.set(tab);
     if (tab === 'pipelines') {
-      this.updateDagConnections();
+      this.loadPipelines();
     }
   }
 
@@ -344,6 +344,7 @@ export class App implements OnInit, OnDestroy {
         alert("Please check your settings configuration to ensure all connection details are correct for this project.");
         this.loadDbTables();
         this.loadWorkspaceFiles();
+        this.loadPipelines();
       },
       error: (err) => {
         alert('Initialization failed: ' + (err.error?.message || err.message));
@@ -428,6 +429,7 @@ export class App implements OnInit, OnDestroy {
                 
                 // Reload files tree and auto open this generated script
                 this.loadWorkspaceFiles();
+                this.loadPipelines();
                 this.setTab('notebook');
                 setTimeout(() => {
                   this.openFileByPath(`my_mage_project/${res.filename}`);
@@ -481,6 +483,7 @@ export class App implements OnInit, OnDestroy {
             
             // Reload files tree and auto open this generated script
             this.loadWorkspaceFiles();
+            this.loadPipelines();
             this.setTab('notebook');
             setTimeout(() => {
               this.openFileByPath(`my_mage_project/${res.filename}`);

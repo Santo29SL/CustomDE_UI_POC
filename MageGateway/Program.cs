@@ -91,6 +91,10 @@ ConfigModel GetConfig()
         if (string.IsNullOrEmpty(config.MageUrl)) config.MageUrl = Environment.GetEnvironmentVariable("MAGE_URL") ?? "http://localhost:6789/api";
         if (string.IsNullOrEmpty(config.MageApiKey)) config.MageApiKey = Environment.GetEnvironmentVariable("MAGE_API_KEY") ?? "";
         
+        // Prefill DB connection URIs if empty
+        if (string.IsNullOrEmpty(config.PostgresUri)) config.PostgresUri = Environment.GetEnvironmentVariable("POSTGRES_URI") ?? "postgresql://postgres:postgres@localhost:5432/expendsave";
+        if (string.IsNullOrEmpty(config.MongoUri)) config.MongoUri = Environment.GetEnvironmentVariable("MONGO_URI") ?? "mongodb://localhost:27017/expendsave";
+        
         return config;
     }
     catch
@@ -98,6 +102,8 @@ ConfigModel GetConfig()
         var defaults = new ConfigModel();
         defaults.MageUrl = Environment.GetEnvironmentVariable("MAGE_URL") ?? "http://localhost:6789/api";
         defaults.MageApiKey = Environment.GetEnvironmentVariable("MAGE_API_KEY") ?? "";
+        defaults.PostgresUri = Environment.GetEnvironmentVariable("POSTGRES_URI") ?? "postgresql://postgres:postgres@localhost:5432/expendsave";
+        defaults.MongoUri = Environment.GetEnvironmentVariable("MONGO_URI") ?? "mongodb://localhost:27017/expendsave";
         return defaults;
     }
 }
@@ -197,6 +203,12 @@ async Task<string> ExecutePsqlQueryAsync(string query, string postgresUri)
         Console.WriteLine($"Error running psql process: {ex.Message}");
         return "[]";
     }
+}
+
+// Helper to validate SQL schema/table identifiers to prevent SQL injection
+bool IsValidDbIdentifier(string name)
+{
+    return !string.IsNullOrEmpty(name) && System.Text.RegularExpressions.Regex.IsMatch(name, "^[a-zA-Z_][a-zA-Z0-9_]*$");
 }
 
 // Helper to translate virtual UI folder paths to host paths safely (preventing directory traversal and mapping to the active project subfolder)
@@ -587,13 +599,36 @@ app.MapPost("/api/workspace/execute", async ([FromBody] ExecutePayload payload) 
             using var process = new System.Diagnostics.Process();
             if (config.ExecutionMode == "docker")
             {
+                // Ensure container is running before attempting to run scripts/dbt
+                try
+                {
+                    using var startProc = new System.Diagnostics.Process();
+                    startProc.StartInfo.FileName = "docker";
+                    startProc.StartInfo.Arguments = $"start {config.DockerContainerName}";
+                    startProc.StartInfo.UseShellExecute = false;
+                    startProc.StartInfo.CreateNoWindow = true;
+                    startProc.Start();
+                    await startProc.WaitForExitAsync();
+                }
+                catch (Exception ex)
+                {
+                    logs.AppendLine($"[{DateTime.Now:HH:mm:ss}] [WARNING] Failed to ensure docker container is running: {ex.Message}");
+                }
+
                 // Run inside the Mage docker container
                 string cleanFileName = fileName.TrimStart('/');
                 if (cleanFileName.StartsWith("my_mage_project/"))
                 {
                     cleanFileName = cleanFileName.Substring("my_mage_project/".Length);
                 }
-                string containerFile = $"/home/src/my_mage_project/{cleanFileName}";
+                
+                string projFolder = config.ProjectName.ToLower().Replace(" ", "_");
+                if (!cleanFileName.StartsWith(projFolder + "/", StringComparison.OrdinalIgnoreCase))
+                {
+                    cleanFileName = Path.Combine(projFolder, cleanFileName);
+                }
+                
+                string containerFile = $"/home/src/my_mage_project/{cleanFileName.Replace("\\", "/")}";
                 
                 // First, write the latest code to the host directory (which syncs to the container)
                 string hostPath = ResolveVirtualPath(fileName, config.WorkspacePath);
@@ -756,6 +791,10 @@ app.MapGet("/api/workspace/postgres-tables", async () => {
 });
 
 app.MapPost("/api/workspace/preview", async ([FromBody] PreviewTablePayload payload) => {
+    if (!IsValidDbIdentifier(payload.SchemaName) || !IsValidDbIdentifier(payload.TableName))
+    {
+        return Results.BadRequest(new { status = "error", message = "Invalid schema or table name." });
+    }
     var config = GetConfig();
     string query = $"SELECT json_agg(t) FROM (SELECT * FROM {payload.SchemaName}.{payload.TableName} LIMIT 100) t;";
     string json = await ExecutePsqlQueryAsync(query, config.PostgresUri);
@@ -763,11 +802,15 @@ app.MapPost("/api/workspace/preview", async ([FromBody] PreviewTablePayload payl
 });
 
 app.MapDelete("/api/workspace/postgres-table", async (string schemaName, string tableName) => {
-    var config = GetConfig();
     if (string.IsNullOrEmpty(schemaName) || string.IsNullOrEmpty(tableName))
     {
         return Results.BadRequest(new { status = "error", message = "Schema name and Table name are required." });
     }
+    if (!IsValidDbIdentifier(schemaName) || !IsValidDbIdentifier(tableName))
+    {
+        return Results.BadRequest(new { status = "error", message = "Invalid schema or table name." });
+    }
+    var config = GetConfig();
     
     string sql = $"DROP TABLE IF EXISTS \"{schemaName}\".\"{tableName}\" CASCADE;";
     try
@@ -803,6 +846,10 @@ app.MapPost("/api/ingest/upload", async (HttpRequest request) => {
     if (string.IsNullOrEmpty(tableName))
     {
         return Results.BadRequest(new { status = "error", message = "Table name is required." });
+    }
+    if (!System.Text.RegularExpressions.Regex.IsMatch(tableName, "^[a-zA-Z0-9_]+$"))
+    {
+        return Results.BadRequest(new { status = "error", message = "Invalid table name. Only alphanumeric characters and underscores are allowed." });
     }
 
     var config = GetConfig();

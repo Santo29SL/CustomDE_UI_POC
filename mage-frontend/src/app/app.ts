@@ -517,37 +517,21 @@ export class App implements OnInit, OnDestroy {
       },
       error: () => {
         // Simulated file tree structure fallback
+        const proj = this.projectName().toLowerCase().replace(/\s+/g, '_') || 'my_project';
         this.fileTree.set([
           {
             name: 'my_mage_project',
             type: 'directory',
             isOpen: true,
             children: [
-              { name: 'ingest_mongodb_users.py', type: 'file', language: 'python' },
-              { name: 'run_medallion_pipeline.py', type: 'file', language: 'python' },
               {
-                name: 'bronze',
+                name: proj,
                 type: 'directory',
                 isOpen: true,
                 children: [
-                  { name: 'postgres_init.sql', type: 'file', language: 'sql' },
-                  { name: 'users.sql', type: 'file', language: 'sql' }
-                ]
-              },
-              {
-                name: 'silver',
-                type: 'directory',
-                isOpen: true,
-                children: [
-                  { name: 'stg_users.sql', type: 'file', language: 'sql' }
-                ]
-              },
-              {
-                name: 'gold',
-                type: 'directory',
-                isOpen: true,
-                children: [
-                  { name: 'sales_aggregations.sql', type: 'file', language: 'sql' }
+                  { name: 'bronze', type: 'directory', isOpen: true, children: [] },
+                  { name: 'silver', type: 'directory', isOpen: true, children: [] },
+                  { name: 'gold', type: 'directory', isOpen: true, children: [] }
                 ]
               }
             ]

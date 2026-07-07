@@ -427,6 +427,7 @@ app.MapGet("/api/workspace/projects", () => {
 app.MapGet("/api/workspace/files", () => {
     var config = GetConfig();
     string path = config.WorkspacePath;
+    string projFolder = config.ProjectName.ToLower().Replace(" ", "_");
     if (!Directory.Exists(path))
     {
         return Results.Json(new[] {
@@ -435,15 +436,21 @@ app.MapGet("/api/workspace/files", () => {
                 type = "directory",
                 isOpen = true,
                 children = new object[] {
-                    new { name = "bronze", type = "directory", children = new object[] {} },
-                    new { name = "silver", type = "directory", children = new object[] {} },
-                    new { name = "gold", type = "directory", children = new object[] {} }
+                    new {
+                        name = projFolder,
+                        type = "directory",
+                        isOpen = true,
+                        children = new object[] {
+                            new { name = "bronze", type = "directory", children = new object[] {} },
+                            new { name = "silver", type = "directory", children = new object[] {} },
+                            new { name = "gold", type = "directory", children = new object[] {} }
+                        }
+                    }
                 }
             }
         });
     }
 
-    string projFolder = config.ProjectName.ToLower().Replace(" ", "_");
     string activeProjectPath = Path.Combine(path, projFolder);
 
     // If the active project directory doesn't exist on disk, materialize it dynamically to enforce strict scoping

@@ -4,7 +4,7 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 
 MYSQL_URI = os.getenv("MYSQL_URI", "mysql+pymysql://root:Satlav%4076@localhost:3306/medical_profiles")
-POSTGRES_URI = os.getenv("POSTGRES_URI", "postgresql://postgres:postgres@localhost:5432/expendsave")
+POSTGRES_URI = os.getenv("POSTGRES_URI", "postgresql://postgres:postgres@localhost:5432/healthcare")
 
 # Docker DNS overrides
 if os.getenv("DOCKER_ENV") == "true":

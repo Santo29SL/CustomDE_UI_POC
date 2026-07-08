@@ -1037,4 +1037,196 @@
   color: var(--text-success) !important;
 }
 
+/* Onboarding Wizard Styling */
+.onboarding-wizard-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  inline-size: 100%;
+  block-size: 100%;
+  padding: 3rem;
+  background-color: var(--bg-base);
+}
+
+.onboarding-card {
+  max-inline-size: 650px;
+  inline-size: 100%;
+  padding: 2.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border-subtle);
+  background-color: var(--bg-surface);
+}
+
+.onboarding-header {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.logo-icon-large {
+  inline-size: 48px;
+  block-size: 48px;
+  background: var(--grad-primary);
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  color: #ffffff;
+  font-size: 1.5rem;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.25);
+  margin-bottom: 0.5rem;
+}
+
+.onboarding-header h2 {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.5px;
+}
+
+.onboarding-header p {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.onboarding-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.onboarding-step {
+  display: flex;
+  gap: 1rem;
+  padding: 1.25rem;
+  border: 1px solid var(--border-subtle);
+  background-color: var(--bg-base);
+  transition: all 0.2s ease;
+}
+
+.onboarding-step.active {
+  border-color: var(--accent-green);
+  background-color: var(--bg-surface);
+  box-shadow: var(--glow-shadow);
+}
+
+.onboarding-step.locked {
+  opacity: 0.6;
+  background-color: var(--bg-base);
+  cursor: not-allowed;
+}
+
+.step-num {
+  inline-size: 28px;
+  block-size: 28px;
+  background-color: var(--border-subtle);
+  color: var(--text-muted);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.onboarding-step.active .step-num {
+  background: var(--grad-primary);
+  color: white;
+}
+
+.step-details h4 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.step-details p {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+/* Locked Workspace Overlay */
+.locked-workspace-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  background-color: rgba(248, 250, 252, 0.95);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+}
+
+.locked-card {
+  max-inline-size: 480px;
+  inline-size: 100%;
+  padding: 2.25rem;
+  text-align: center;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--border-subtle);
+}
+
+.locked-card h3 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.checklist-items {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  text-align: left;
+  margin-top: 1.5rem;
+}
+
+.checklist-item {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background-color: var(--bg-base);
+  border: 1px solid var(--border-subtle);
+}
+
+.checklist-item.done {
+  border-color: rgba(16, 185, 129, 0.2);
+  background-color: rgba(16, 185, 129, 0.02);
+}
+
+.chk-icon {
+  font-size: 1.15rem;
+}
+
+.chk-text {
+  flex: 1;
+}
+
+.chk-text strong {
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  display: block;
+}
+
+.chk-text p {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 0.15rem;
+}
+
+.chk-text .badge {
+  display: inline-block;
+  background-color: var(--bg-surface-solid);
+  padding: 0.1rem 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: capitalize;
+}
+
 

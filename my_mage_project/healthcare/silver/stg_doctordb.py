@@ -9,7 +9,7 @@ spark = SparkSession.builder \
     .getOrCreate()
 
 # Retrieve and adjust PostgreSQL connection details
-postgres_uri = "postgresql://postgres:postgres@localhost:5432/expendsave"
+postgres_uri = "postgresql://postgres:postgres@localhost:5432/healthcare"
 if os.getenv("DOCKER_ENV") == "true":
     postgres_uri = postgres_uri.replace("localhost", "host.docker.internal")
 

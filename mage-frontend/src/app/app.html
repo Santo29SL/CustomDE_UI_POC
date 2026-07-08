@@ -30,7 +30,16 @@
         <span class="status-dot"></span>
         <span>Mage Engine Active</span>
       </div>
-      <div style="margin-top: 0.5rem; text-transform: capitalize;">Project: {{ projectName() }}</div>
+      @if (projectName()) {
+        <div style="margin-top: 0.5rem; display: flex; align-items: center; justify-content: space-between; text-transform: capitalize; font-size: 0.85rem;">
+          <span>Project: {{ projectName() }}</span>
+          <button style="background: rgba(239, 68, 68, 0.25); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 4px; padding: 0.15rem 0.35rem; font-size: 0.65rem; cursor: pointer; transition: all 0.2s;" (click)="deleteCurrentProjectPrompt()" title="Delete Project & Drop Database" onmouseover="this.style.background='rgba(239, 68, 68, 0.4)'" onmouseout="this.style.background='rgba(239, 68, 68, 0.25)'">
+            🗑️ Delete
+          </button>
+        </div>
+      } @else {
+        <div style="margin-top: 0.5rem; text-transform: capitalize;">Project: None</div>
+      }
       <div style="font-size: 0.7rem; color: var(--text-secondary)">Gateway: Port 5050</div>
       <button class="btn btn-secondary" style="margin-top: 1rem; padding: 0.4rem; font-size: 0.75rem;" (click)="settingsModalOpen.set(true)">
         ⚙️ Settings Configuration
@@ -58,8 +67,54 @@
     </header>
 
     <div class="tab-viewport">
-      <!-- 1. DATA INGESTION TAB -->
-      @if (currentTab() === 'ingest') {
+      @if (!projectName()) {
+        <!-- ONBOARDING WIZARD -->
+        <div class="onboarding-wizard-container">
+          <div class="glass-panel onboarding-card">
+            <div class="onboarding-header">
+              <span class="logo-icon-large">MY</span>
+              <h2>Welcome to DE GUI Platform</h2>
+              <p>Please follow the setup sequence below to configure and access your workspace.</p>
+            </div>
+            
+            <div class="onboarding-steps">
+              <div class="onboarding-step active">
+                <div class="step-num">1</div>
+                <div class="step-details">
+                  <h4>Step 1: Initialize Project Schema</h4>
+                  <p>Choose an existing project folder or create a new project schema medallion structure on disk.</p>
+                  <div style="display: flex; gap: 1rem; margin-top: 0.75rem;">
+                    <button class="btn btn-primary btn-sm" (click)="projectInitMode.set('new'); initializeProjectSchema()">
+                      ➕ Create New Project
+                    </button>
+                    <button class="btn btn-secondary btn-sm" (click)="projectInitMode.set('existing'); initializeProjectSchema()">
+                      📁 Select Existing Project
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="onboarding-step locked">
+                <div class="step-num">2</div>
+                <div class="step-details">
+                  <h4>Step 2: Settings Configuration</h4>
+                  <p>Check/save connection parameters for MySQL, MongoDB, and PostgreSQL database targets.</p>
+                </div>
+              </div>
+              
+              <div class="onboarding-step locked">
+                <div class="step-num">3</div>
+                <div class="step-details">
+                  <h4>Step 3: Data Ingestion</h4>
+                  <p>Set up source parameters and initialize ingestion to generate your bronze script layer.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      } @else {
+        <!-- 1. DATA INGESTION TAB -->
+        @if (currentTab() === 'ingest') {
         <div class="ingest-grid">
           <div class="glass-panel" style="display: flex; flex-direction: column; gap: 1.25rem;">
             <h3>Ingestion Data Source</h3>
@@ -187,9 +242,59 @@
 
       <!-- 2. NOTEBOOK IDE TAB -->
       @if (currentTab() === 'notebook') {
-        <div class="notebook-container">
-          <!-- File Browser -->
-          <div class="file-browser">
+        <div class="notebook-container" style="position: relative;">
+          @if (!settingsConfigured() || !ingestionConfigured()) {
+            <!-- LOCKED STATE / CHECKLIST WIZARD -->
+            <div class="locked-workspace-overlay">
+              <div class="glass-panel locked-card">
+                <h3>🔒 Notebook Workspace Locked</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.85rem;">
+                  Please complete the onboarding steps in sequence before accessing the Notebook Editor files.
+                </p>
+                
+                <div class="checklist-items">
+                  <!-- Step 1: Project initialized -->
+                  <div class="checklist-item done">
+                    <span class="chk-icon">✅</span>
+                    <div class="chk-text">
+                      <strong>Step 1: Project Selected</strong>
+                      <p>Selected project: <span class="badge">{{ projectName() }}</span></p>
+                    </div>
+                  </div>
+
+                  <!-- Step 2: Settings saved -->
+                  <div class="checklist-item" [class.done]="settingsConfigured()">
+                    <span class="chk-icon">{{ settingsConfigured() ? '✅' : '⏳' }}</span>
+                    <div class="chk-text">
+                      <strong>Step 2: Settings Configuration</strong>
+                      <p>Check/save settings in the settings panel.</p>
+                      @if (!settingsConfigured()) {
+                        <button class="btn btn-secondary btn-sm" style="margin-top: 0.35rem; font-size: 0.75rem; padding: 0.25rem 0.5rem;" (click)="settingsModalOpen.set(true)">
+                          ⚙️ Configure Settings Now
+                        </button>
+                      }
+                    </div>
+                  </div>
+
+                  <!-- Step 3: Ingestion configured -->
+                  <div class="checklist-item" [class.done]="ingestionConfigured()">
+                    <span class="chk-icon">{{ ingestionConfigured() ? '✅' : '⏳' }}</span>
+                    <div class="chk-text">
+                      <strong>Step 3: File Ingestion</strong>
+                      <p>Go to the Data Ingestion tab and initialize/run an ingestion script.</p>
+                      @if (!ingestionConfigured()) {
+                        <button class="btn btn-secondary btn-sm" style="margin-top: 0.35rem; font-size: 0.75rem; padding: 0.25rem 0.5rem;" (click)="setTab('ingest')">
+                          📥 Go to Data Ingestion
+                        </button>
+                      }
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          } @else {
+            <!-- File Browser -->
+            <div class="file-browser">
             <div class="browser-header" style="display: flex; justify-content: space-between; align-items: center; gap: 0.25rem;">
               <span>Workspace Project</span>
               <div style="display: flex; gap: 0.25rem;">
@@ -410,8 +515,9 @@
               </div>
             </div>
           </div>
-        </div>
-      }
+        }
+      </div>
+    }
 
       <!-- 3. PIPELINE LINEAGE TAB -->
       @if (currentTab() === 'pipelines') {
@@ -552,7 +658,8 @@
           }
         </div>
       }
-    </div>
+    }
+  </div>
   </main>
 </div>
 

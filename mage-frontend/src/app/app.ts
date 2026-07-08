@@ -28,6 +28,10 @@ export class App implements OnInit, OnDestroy {
   readonly currentTab = signal<string>('ingest');
   readonly settingsModalOpen = signal<boolean>(false);
 
+  // Sequence Tracking signals
+  readonly settingsConfigured = signal<boolean>(false);
+  readonly ingestionConfigured = signal<boolean>(false);
+
   // Project Initializer signals
   readonly projectModalOpen = signal<boolean>(false);
   readonly projectInitMode = signal<string>('new');
@@ -138,7 +142,7 @@ export class App implements OnInit, OnDestroy {
     this.http.get<any>(`${this.gatewayUrl}/metadata`).subscribe({
       next: (config) => {
         if (config) {
-          this.projectName.set(config.projectName || 'my_project');
+          this.projectName.set(config.projectName || '');
           this.workspacePath.set(config.workspacePath || '');
           this.executionMode.set(config.executionMode || 'docker');
           this.dockerContainerName.set(config.dockerContainerName || 'cranky_faraday');
@@ -153,15 +157,23 @@ export class App implements OnInit, OnDestroy {
           this.mageApiKey.set(config.mageApiKey || '');
           this.supersetUrl.set(config.supersetUrl || 'http://localhost:8088/superset/dashboard/1/?standalone=true');
           
-          // Once config is loaded, call secondary workspace queries
-          this.loadWorkspaceFiles();
-          this.loadDbTables();
-          this.loadPipelines();
+          // Once config is loaded, call secondary workspace queries if project selected
+          if (this.projectName()) {
+            this.loadWorkspaceFiles();
+            this.loadDbTables();
+            this.loadPipelines();
+          } else {
+            this.fileTree.set([]);
+            this.dbTables.set([]);
+            this.pipelines.set([]);
+          }
         }
       },
       error: (err) => {
         console.error('Failed to load configs. Operating in simulated offline mode.', err);
-        this.loadWorkspaceFiles();
+        if (this.projectName()) {
+          this.loadWorkspaceFiles();
+        }
       }
     });
   }
@@ -188,9 +200,12 @@ export class App implements OnInit, OnDestroy {
     this.http.post<any>(`${this.gatewayUrl}/metadata`, payload).subscribe({
       next: (res) => {
         this.settingsModalOpen.set(false);
-        this.loadWorkspaceFiles();
-        this.loadDbTables();
-        this.loadPipelines();
+        this.settingsConfigured.set(true);
+        if (this.projectName()) {
+          this.loadWorkspaceFiles();
+          this.loadDbTables();
+          this.loadPipelines();
+        }
         alert('Configuration saved successfully!');
       },
       error: (err) => {
@@ -300,10 +315,12 @@ export class App implements OnInit, OnDestroy {
       }
     }
 
-    this.http.post<any>(`${this.gatewayUrl}/project/initialize`, { ProjectName: name }).subscribe({
+    this.http.post<any>(`${this.gatewayUrl}/project/initialize`, { ProjectName: name, ProjectType: this.projectInitMode() }).subscribe({
       next: (res) => {
         this.projectName.set(name);
         this.projectModalOpen.set(false);
+        this.settingsConfigured.set(false);
+        this.ingestionConfigured.set(false);
         alert(res.message);
         alert("Please check your settings configuration to ensure all connection details are correct for this project.");
         this.loadDbTables();
@@ -312,6 +329,30 @@ export class App implements OnInit, OnDestroy {
       },
       error: (err) => {
         alert('Initialization failed: ' + (err.error?.message || err.message));
+      }
+    });
+  }
+
+  deleteCurrentProjectPrompt() {
+    const projName = this.projectName();
+    if (!projName) return;
+
+    if (!confirm(`⚠️ WARNING: Are you sure you want to delete the project "${projName}"?\n\nThis will permanently delete the project folder on disk and DROP the "${projName.toLowerCase().replace(/ /g, '_')}" PostgreSQL database. This action CANNOT be undone.`)) {
+      return;
+    }
+
+    this.http.delete<any>(`${this.gatewayUrl}/project?projectName=${projName}`).subscribe({
+      next: (res) => {
+        alert(res.message);
+        this.projectName.set('');
+        this.settingsConfigured.set(false);
+        this.ingestionConfigured.set(false);
+        this.loadConfiguration();
+        this.loadDbTables();
+        this.loadWorkspaceFiles();
+      },
+      error: (err) => {
+        alert("Failed to delete project: " + (err.error?.message || err.message));
       }
     });
   }
@@ -380,6 +421,7 @@ export class App implements OnInit, OnDestroy {
             next: (res) => {
               clearInterval(initInterval);
               this.ingestionProgress.set(100);
+              this.ingestionConfigured.set(true);
               setTimeout(() => {
                 this.ingesting.set(false);
                 this.ingestionProgress.set(0);
@@ -436,6 +478,7 @@ export class App implements OnInit, OnDestroy {
         next: (res) => {
           clearInterval(interval);
           this.ingestionProgress.set(100);
+          this.ingestionConfigured.set(true);
           setTimeout(() => {
             this.ingesting.set(false);
             this.ingestionProgress.set(0);
@@ -468,7 +511,21 @@ export class App implements OnInit, OnDestroy {
   // FILE BROWSER & MONACO notebook logic
   // ==========================================
 
+  checkIfTreeHasFiles(nodes: FileNode[]): boolean {
+    for (const node of nodes) {
+      if (node.type === 'file') return true;
+      if (node.type === 'directory' && node.children) {
+        if (this.checkIfTreeHasFiles(node.children)) return true;
+      }
+    }
+    return false;
+  }
+
   loadWorkspaceFiles() {
+    if (!this.projectName()) {
+      this.fileTree.set([]);
+      return;
+    }
     this.http.get<any>(`${this.gatewayUrl}/workspace/files`).subscribe({
       next: (data) => {
         let list: FileNode[] = [];
@@ -478,8 +535,18 @@ export class App implements OnInit, OnDestroy {
           list = data;
         }
         this.fileTree.set(list);
+        
+        // Auto-detect history for existing projects with files
+        if (this.projectName() && this.checkIfTreeHasFiles(list)) {
+          this.settingsConfigured.set(true);
+          this.ingestionConfigured.set(true);
+        }
       },
       error: () => {
+        if (!this.projectName()) {
+          this.fileTree.set([]);
+          return;
+        }
         // Simulated file tree structure fallback
         const proj = this.projectName().toLowerCase().replace(/\s+/g, '_') || 'my_project';
         this.fileTree.set([

@@ -7,6 +7,18 @@ using Microsoft.AspNetCore.Mvc;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure Kestrel limits to allow large file uploads (up to 500 MB)
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 500 * 1024 * 1024; // 500 MB
+});
+
+// Configure Form options to allow large multipart form bodies
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 500 * 1024 * 1024; // 500 MB
+});
+
 // Enable CORS for Angular frontend
 builder.Services.AddCors(options => {
     options.AddPolicy("AllowAngular", policy => 
@@ -77,6 +89,27 @@ if (!File.Exists(configPath))
         SupersetUrl = Environment.GetEnvironmentVariable("SUPERSET_URL") ?? "http://localhost:8088/superset/dashboard/1/?standalone=true"
     };
     File.WriteAllText(configPath, JsonSerializer.Serialize(defaultConfig, new JsonSerializerOptions { WriteIndented = true }));
+}
+
+// Reset ProjectName and ProjectType on startup so the UI starts afresh blank
+try
+{
+    if (File.Exists(configPath))
+    {
+        string json = File.ReadAllText(configPath);
+        var config = JsonSerializer.Deserialize<ConfigModel>(json);
+        if (config != null)
+        {
+            config.ProjectName = "";
+            config.ProjectType = "";
+            File.WriteAllText(configPath, JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true }));
+            Console.WriteLine("[STARTUP] Active project configuration reset to empty for fresh startup.");
+        }
+    }
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Error resetting configuration on startup: {ex.Message}");
 }
 
 // Database Helpers for Project-Specific Isolation
@@ -441,6 +474,7 @@ app.MapPost("/api/project/initialize", async ([FromBody] InitProjectPayload payl
     }
 
     config.ProjectName = payload.ProjectName;
+    config.ProjectType = payload.ProjectType ?? "";
     SaveConfig(config);
 
     // Physically create medallion directories on disk under the new project subfolder
@@ -479,13 +513,62 @@ app.MapPost("/api/project/initialize", async ([FromBody] InitProjectPayload payl
     // Connect to the specific database to create the medallion schemas
     string projectDbUri = GetProjectPostgresUri(config.PostgresUri, proj);
     string sql = $@"
-        CREATE SCHEMA IF NOT EXISTS {proj}_bronze;
-        CREATE SCHEMA IF NOT EXISTS {proj}_silver;
-        CREATE SCHEMA IF NOT EXISTS {proj}_gold;
+        CREATE SCHEMA IF NOT EXISTS {dbName}_bronze;
+        CREATE SCHEMA IF NOT EXISTS {dbName}_silver;
+        CREATE SCHEMA IF NOT EXISTS {dbName}_gold;
     ";
 
     string result = await ExecutePsqlQueryAsync(sql, projectDbUri);
-    return Results.Json(new { status = "success", message = $"Project database '{dbName}' and medallion schemas {proj}_bronze, {proj}_silver, and {proj}_gold initialized in PostgreSQL successfully, and medallion directories created on disk.", sqlResult = result });
+    return Results.Json(new { status = "success", message = $"Project database '{dbName}' and medallion schemas {dbName}_bronze, {dbName}_silver, and {dbName}_gold initialized in PostgreSQL successfully, and medallion directories created on disk.", sqlResult = result });
+});
+
+app.MapDelete("/api/project", async ([FromQuery] string projectName) => {
+    if (string.IsNullOrEmpty(projectName))
+    {
+        return Results.BadRequest(new { status = "error", message = "Project name is required." });
+    }
+    
+    var config = GetConfig();
+    string dbName = GetDbNameForProject(projectName);
+    
+    // 1. Terminate connections to the project database and drop it
+    try
+    {
+        string slsUri = GetDefaultServerPostgresUri(config.PostgresUri);
+        // Terminate connections first
+        await ExecutePsqlQueryAsync($"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{dbName}' AND pid <> pg_backend_pid();", slsUri);
+        // Drop the database
+        await ExecutePsqlQueryAsync($"DROP DATABASE IF EXISTS {dbName};", slsUri);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error dropping database '{dbName}': {ex.Message}");
+    }
+
+    // 2. Delete the project directory on disk
+    try
+    {
+        string projFolder = projectName.ToLower().Replace(" ", "_");
+        string projDir = Path.Combine(config.WorkspacePath, projFolder);
+        if (Directory.Exists(projDir))
+        {
+            Directory.Delete(projDir, true);
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error deleting project directory: {ex.Message}");
+    }
+
+    // 3. Reset active project in config if it is the deleted project
+    if (config.ProjectName.Equals(projectName, StringComparison.OrdinalIgnoreCase))
+    {
+        config.ProjectName = "";
+        config.ProjectType = "";
+        SaveConfig(config);
+    }
+
+    return Results.Json(new { status = "success", message = $"Project '{projectName}' database dropped and folder deleted successfully." });
 });
 
 // ==========================================
@@ -513,6 +596,11 @@ app.MapGet("/api/workspace/projects", () => {
 
 app.MapGet("/api/workspace/files", () => {
     var config = GetConfig();
+    if (string.IsNullOrEmpty(config.ProjectName))
+    {
+        return Results.Json(new object[] {});
+    }
+
     string path = config.WorkspacePath;
     string projFolder = config.ProjectName.ToLower().Replace(" ", "_");
     if (!Directory.Exists(path))
@@ -554,6 +642,45 @@ app.MapGet("/api/workspace/files", () => {
         {
             Console.WriteLine($"Error creating missing project directories: {ex.Message}");
         }
+    }
+
+    if (config.ProjectType == "new")
+    {
+        var newProjChildren = new List<object>();
+        string[] allowedFolders = { "bronze", "silver", "gold" };
+        foreach (var folder in allowedFolders)
+        {
+            string folderPath = Path.Combine(activeProjectPath, folder);
+            if (!Directory.Exists(folderPath))
+            {
+                Directory.CreateDirectory(folderPath);
+            }
+            var dirList = ScanFilesRecursive(folderPath, folder);
+            newProjChildren.Add(new {
+                name = folder,
+                type = "directory",
+                isOpen = true,
+                children = dirList
+            });
+        }
+        var newProjectFolderNode = new
+        {
+            name = projFolder,
+            type = "directory",
+            isOpen = true,
+            children = newProjChildren.ToArray()
+        };
+        var newTree = new[]
+        {
+            new
+            {
+                name = "my_mage_project",
+                type = "directory",
+                isOpen = true,
+                children = new object[] { newProjectFolderNode }
+            }
+        };
+        return Results.Json(newTree);
     }
 
     string scanPath = activeProjectPath;
@@ -1058,7 +1185,7 @@ app.MapPost("/api/ingest/upload", async (HttpRequest request) => {
         filePath = hostFilePath,
         fileExtension = fileExt
     });
-});
+}).WithMetadata(new DisableRequestSizeLimitAttribute());
 
 app.MapPost("/api/ingest/initialize", ([FromBody] IngestInitializePayload payload) => {
     var config = GetConfig();
@@ -1359,9 +1486,10 @@ public class ConfigModel
     [JsonPropertyName("mageUrl")] public string MageUrl { get; set; } = "";
     [JsonPropertyName("mageApiKey")] public string MageApiKey { get; set; } = "";
     [JsonPropertyName("supersetUrl")] public string SupersetUrl { get; set; } = "";
+    [JsonPropertyName("projectType")] public string ProjectType { get; set; } = "";
 }
 
-public record InitProjectPayload(string ProjectName);
+public record InitProjectPayload(string ProjectName, string ProjectType);
 public record ExecutePayload(string FileName, string Code, string Language);
 public record WritePayload(string Filename, string Code);
 public record PreviewTablePayload(string SchemaName, string TableName);

@@ -323,10 +323,17 @@
                     🗄️ Database Tables
                   </button>
                 </div>
-                <div style="padding: 0 1rem; display: flex; align-items: center; font-size: 0.75rem; color: var(--text-muted);">
-                  @if (activeTerminalTab() === 'terminal') { <span>Console logs ready</span> }
-                  @if (activeTerminalTab() === 'preview') { <span>SQL table previews (top 10 rows)</span> }
-                  @if (activeTerminalTab() === 'output') { <span>PostgreSQL schemas discovery</span> }
+                <div style="padding: 0 1rem; display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); flex: 1;">
+                  <div>
+                    @if (activeTerminalTab() === 'terminal') { <span>Console logs ready</span> }
+                    @if (activeTerminalTab() === 'preview') { <span>SQL table previews (top 10 rows)</span> }
+                    @if (activeTerminalTab() === 'output') { <span>PostgreSQL schemas discovery</span> }
+                  </div>
+                  @if (activeTerminalTab() === 'output') {
+                    <button class="btn btn-secondary btn-xs" style="padding: 0.15rem 0.4rem; font-size: 0.7rem; display: flex; align-items: center; gap: 0.2rem; background: var(--bg-hover); border-color: var(--border-subtle); color: var(--text-primary);" (click)="loadDbTables()">
+                      🔄 Reload Tables
+                    </button>
+                  }
                 </div>
               </div>
               
@@ -410,7 +417,12 @@
       @if (currentTab() === 'pipelines') {
         <div class="pipelines-container">
           <div class="pipeline-list-panel">
-            <h3>Pipelines List</h3>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+              <h3 style="margin: 0;">Pipelines List</h3>
+              <button class="btn btn-secondary btn-xs" style="padding: 0.2rem 0.4rem; font-size: 0.7rem; display: flex; align-items: center; gap: 0.2rem; background: var(--bg-hover); border-color: var(--border-subtle); color: var(--text-primary);" (click)="loadPipelines()">
+                🔄 Sync
+              </button>
+            </div>
             <div style="display: flex; flex-direction: column; gap: 0.5rem; overflow-y: auto; flex: 1;">
               @for (pipe of pipelines(); track pipe.uuid) {
                 <div class="pipeline-card" [class.selected]="selectedPipeline()?.uuid === pipe.uuid" (click)="selectPipeline(pipe)">

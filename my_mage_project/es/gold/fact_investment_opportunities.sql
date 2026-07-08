@@ -1,6 +1,6 @@
-DROP TABLE IF EXISTS expendsave_gold.fact_investment_opportunities CASCADE;
+DROP TABLE IF EXISTS es_gold.fact_investment_opportunities CASCADE;
 
-CREATE TABLE expendsave_gold.fact_investment_opportunities AS
+CREATE TABLE es_gold.fact_investment_opportunities AS
 SELECT 
     p.user_id,
     p.username,
@@ -19,8 +19,8 @@ SELECT
         WHEN s.risk_level = 'low' THEN 'Recommended (capital Preservation)'
         ELSE 'Neutral Allocation'
     END AS recommendation_tier
-FROM expendsave_gold.fact_user_financial_profile p
-CROSS JOIN expendsave_silver.stg_investment_schemes s
+FROM es_gold.fact_user_financial_profile p
+CROSS JOIN es_silver.stg_investment_schemes s
 WHERE p.current_calculated_balance > 0; -- Only match if they have money left
 
-ALTER TABLE expendsave_gold.fact_investment_opportunities ADD PRIMARY KEY (user_id, scheme_id);
+ALTER TABLE es_gold.fact_investment_opportunities ADD PRIMARY KEY (user_id, scheme_id);

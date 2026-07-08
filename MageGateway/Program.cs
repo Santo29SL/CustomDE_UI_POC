@@ -79,6 +79,71 @@ if (!File.Exists(configPath))
     File.WriteAllText(configPath, JsonSerializer.Serialize(defaultConfig, new JsonSerializerOptions { WriteIndented = true }));
 }
 
+// Database Helpers for Project-Specific Isolation
+string GetDbNameForProject(string projectName)
+{
+    string proj = (projectName ?? "").ToLower().Replace(" ", "_");
+    if (proj == "es") return "expendsave";
+    return proj;
+}
+
+string GetProjectPostgresUri(string postgresUri, string projectName)
+{
+    if (string.IsNullOrEmpty(postgresUri)) return postgresUri;
+    string targetDb = GetDbNameForProject(projectName);
+    try
+    {
+        var uri = new Uri(postgresUri);
+        var builder = new UriBuilder(uri);
+        builder.Path = "/" + targetDb;
+        return builder.Uri.ToString();
+    }
+    catch
+    {
+        int lastSlash = postgresUri.LastIndexOf('/');
+        if (lastSlash > 0)
+        {
+            string baseUri = postgresUri.Substring(0, lastSlash);
+            string queryParams = "";
+            int questionMark = postgresUri.IndexOf('?', lastSlash);
+            if (questionMark > 0)
+            {
+                queryParams = postgresUri.Substring(questionMark);
+            }
+            return baseUri + "/" + targetDb + queryParams;
+        }
+        return postgresUri;
+    }
+}
+
+string GetDefaultServerPostgresUri(string postgresUri)
+{
+    if (string.IsNullOrEmpty(postgresUri)) return postgresUri;
+    try
+    {
+        var uri = new Uri(postgresUri);
+        var builder = new UriBuilder(uri);
+        builder.Path = "/postgres";
+        return builder.Uri.ToString();
+    }
+    catch
+    {
+        int lastSlash = postgresUri.LastIndexOf('/');
+        if (lastSlash > 0)
+        {
+            string baseUri = postgresUri.Substring(0, lastSlash);
+            string queryParams = "";
+            int questionMark = postgresUri.IndexOf('?', lastSlash);
+            if (questionMark > 0)
+            {
+                queryParams = postgresUri.Substring(questionMark);
+            }
+            return baseUri + "/postgres" + queryParams;
+        }
+        return postgresUri;
+    }
+}
+
 // Read config model
 ConfigModel GetConfig()
 {
@@ -250,7 +315,8 @@ async Task CheckAndCleanUpSchemasAsync(string projectFolder, ConfigModel config)
             FROM information_schema.tables 
             WHERE table_schema IN ('{proj}_bronze', '{proj}_silver', '{proj}_gold');
         ";
-        string countStr = await ExecutePsqlQueryAsync(countQuery, config.PostgresUri);
+        string projectDbUri = GetProjectPostgresUri(config.PostgresUri, proj);
+        string countStr = await ExecutePsqlQueryAsync(countQuery, projectDbUri);
         int tableCount = 0;
         int.TryParse(countStr, out tableCount);
 
@@ -265,7 +331,7 @@ async Task CheckAndCleanUpSchemasAsync(string projectFolder, ConfigModel config)
                 DROP SCHEMA IF EXISTS {proj}_silver CASCADE;
                 DROP SCHEMA IF EXISTS {proj}_gold CASCADE;
             ";
-            await ExecutePsqlQueryAsync(dropSql, config.PostgresUri);
+            await ExecutePsqlQueryAsync(dropSql, projectDbUri);
         }
     }
     catch (Exception ex)
@@ -391,14 +457,35 @@ app.MapPost("/api/project/initialize", async ([FromBody] InitProjectPayload payl
         Console.WriteLine($"Error creating project directories: {ex.Message}");
     }
 
+    string dbName = GetDbNameForProject(proj);
+    
+    // Auto-create database under SLS main DB if it doesn't exist
+    try
+    {
+        string slsUri = GetDefaultServerPostgresUri(config.PostgresUri);
+        string checkDbQuery = $"SELECT 1 FROM pg_database WHERE datname = '{dbName}';";
+        string checkResult = await ExecutePsqlQueryAsync(checkDbQuery, slsUri);
+        if (string.IsNullOrEmpty(checkResult) || checkResult == "[]" || checkResult == "[]\n")
+        {
+            Console.WriteLine($"[DB Auto-Provision] Creating database '{dbName}' under SLS main DB server...");
+            await ExecutePsqlQueryAsync($"CREATE DATABASE {dbName};", slsUri);
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error during DB auto-provisioning check: {ex.Message}");
+    }
+
+    // Connect to the specific database to create the medallion schemas
+    string projectDbUri = GetProjectPostgresUri(config.PostgresUri, proj);
     string sql = $@"
         CREATE SCHEMA IF NOT EXISTS {proj}_bronze;
         CREATE SCHEMA IF NOT EXISTS {proj}_silver;
         CREATE SCHEMA IF NOT EXISTS {proj}_gold;
     ";
 
-    string result = await ExecutePsqlQueryAsync(sql, config.PostgresUri);
-    return Results.Json(new { status = "success", message = $"Project schemas {proj}_bronze, {proj}_silver, and {proj}_gold initialized in PostgreSQL, and medallion directories created on disk.", sqlResult = result });
+    string result = await ExecutePsqlQueryAsync(sql, projectDbUri);
+    return Results.Json(new { status = "success", message = $"Project database '{dbName}' and medallion schemas {proj}_bronze, {proj}_silver, and {proj}_gold initialized in PostgreSQL successfully, and medallion directories created on disk.", sqlResult = result });
 });
 
 // ==========================================
@@ -642,7 +729,7 @@ app.MapPost("/api/workspace/execute", async ([FromBody] ExecutePayload payload) 
             if (code.Contains("CREATE SCHEMA") || code.Contains("CREATE TABLE") || code.Contains("INSERT INTO") || code.Contains("TRUNCATE"))
             {
                 logs.AppendLine($"[{DateTime.Now:HH:mm:ss}] [INFO] Executing DDL/DML statement on PostgreSQL...");
-                string ddlResult = await ExecutePsqlQueryAsync(code, config.PostgresUri);
+                string ddlResult = await ExecutePsqlQueryAsync(code, GetProjectPostgresUri(config.PostgresUri, config.ProjectName));
                 logs.AppendLine($"[{DateTime.Now:HH:mm:ss}] [SUCCESS] Execute successful.");
                 if (!string.IsNullOrEmpty(ddlResult)) logs.AppendLine(ddlResult);
             }
@@ -651,7 +738,7 @@ app.MapPost("/api/workspace/execute", async ([FromBody] ExecutePayload payload) 
                 // Select query: Wrap in json_agg to retrieve tabular format as JSON
                 logs.AppendLine($"[{DateTime.Now:HH:mm:ss}] [INFO] Executing SQL Select query...");
                 string selectQuery = $"SELECT json_agg(t) FROM ({code.TrimEnd(';')}) t;";
-                string jsonResult = await ExecutePsqlQueryAsync(selectQuery, config.PostgresUri);
+                string jsonResult = await ExecutePsqlQueryAsync(selectQuery, GetProjectPostgresUri(config.PostgresUri, config.ProjectName));
                 
                 if (!string.IsNullOrEmpty(jsonResult) && jsonResult != "[]" && jsonResult != "[]\n")
                 {
@@ -739,6 +826,9 @@ app.MapPost("/api/workspace/execute", async ([FromBody] ExecutePayload payload) 
 
                 process.StartInfo.FileName = "docker";
                 
+                string projectDbUri = GetProjectPostgresUri(config.PostgresUri, config.ProjectName);
+                string projectDbName = GetDbNameForProject(config.ProjectName);
+
                 if ((cleanFileName.Contains("/silver/") || cleanFileName.Contains("/gold/")) && cleanFileName.EndsWith(".sql"))
                 {
                     // DBT runs inside container
@@ -747,7 +837,7 @@ app.MapPost("/api/workspace/execute", async ([FromBody] ExecutePayload payload) 
                     string dbtWorkingDir = string.IsNullOrEmpty(projName)
                         ? "/home/src/my_mage_project/dbt"
                         : $"/home/src/my_mage_project/{projName}/dbt";
-                    process.StartInfo.Arguments = $"exec -e DB_HOST=host.docker.internal -w {dbtWorkingDir} {config.DockerContainerName} dbt run --select {modelName}";
+                    process.StartInfo.Arguments = $"exec -e DB_HOST=host.docker.internal -e DB_NAME=\"{projectDbName}\" -w {dbtWorkingDir} {config.DockerContainerName} dbt run --select {modelName}";
                 }
                 else
                 {
@@ -756,7 +846,7 @@ app.MapPost("/api/workspace/execute", async ([FromBody] ExecutePayload payload) 
                     if (language == "r") commandRunner = "Rscript";
                     else if (language == "pyspark") commandRunner = "spark-submit --packages org.postgresql:postgresql:42.7.3";
 
-                    process.StartInfo.Arguments = $"exec -e DOCKER_ENV=true {config.DockerContainerName} {commandRunner} {containerFile}";
+                    process.StartInfo.Arguments = $"exec -e DOCKER_ENV=true -e POSTGRES_URI=\"{projectDbUri}\" {config.DockerContainerName} {commandRunner} {containerFile}";
                 }
             }
             else
@@ -778,6 +868,13 @@ app.MapPost("/api/workspace/execute", async ([FromBody] ExecutePayload payload) 
                     projName = parts[0];
                 }
 
+                string projectDbUri = GetProjectPostgresUri(config.PostgresUri, config.ProjectName);
+                string projectDbName = GetDbNameForProject(config.ProjectName);
+
+                // Set environment variables for local execution process
+                process.StartInfo.EnvironmentVariables["POSTGRES_URI"] = projectDbUri;
+                process.StartInfo.EnvironmentVariables["DB_NAME"] = projectDbName;
+
                 if (cleanFileName.Contains("/silver/") || cleanFileName.Contains("/gold/"))
                 {
                     string modelName = Path.GetFileNameWithoutExtension(cleanFileName);
@@ -787,6 +884,7 @@ app.MapPost("/api/workspace/execute", async ([FromBody] ExecutePayload payload) 
                         ? Path.Combine(config.WorkspacePath, "dbt")
                         : Path.Combine(config.WorkspacePath, projName, "dbt");
                     process.StartInfo.WorkingDirectory = dbtLocalDir;
+                    process.StartInfo.EnvironmentVariables["DB_HOST"] = "localhost";
                 }
                 else
                 {
@@ -853,7 +951,8 @@ app.MapGet("/api/workspace/postgres-tables", async () => {
         ) t;
     ";
     
-    string json = await ExecutePsqlQueryAsync(query, config.PostgresUri);
+    string projectDbUri = GetProjectPostgresUri(config.PostgresUri, config.ProjectName);
+    string json = await ExecutePsqlQueryAsync(query, projectDbUri);
     if (string.IsNullOrEmpty(json) || json == "[]" || json == "[]\n")
     {
         return Results.Json(new object[] {});
@@ -868,7 +967,8 @@ app.MapPost("/api/workspace/preview", async ([FromBody] PreviewTablePayload payl
     }
     var config = GetConfig();
     string query = $"SELECT json_agg(t) FROM (SELECT * FROM {payload.SchemaName}.{payload.TableName} LIMIT 100) t;";
-    string json = await ExecutePsqlQueryAsync(query, config.PostgresUri);
+    string projectDbUri = GetProjectPostgresUri(config.PostgresUri, config.ProjectName);
+    string json = await ExecutePsqlQueryAsync(query, projectDbUri);
     return Results.Content(json, "application/json");
 });
 
@@ -886,7 +986,8 @@ app.MapDelete("/api/workspace/postgres-table", async (string schemaName, string 
     string sql = $"DROP TABLE IF EXISTS \"{schemaName}\".\"{tableName}\" CASCADE;";
     try
     {
-        await ExecutePsqlQueryAsync(sql, config.PostgresUri);
+        string projectDbUri = GetProjectPostgresUri(config.PostgresUri, config.ProjectName);
+        await ExecutePsqlQueryAsync(sql, projectDbUri);
         
         // Trigger check for schemas cleanup
         string projFolder = config.ProjectName.ToLower().Replace(" ", "_");
@@ -975,12 +1076,13 @@ app.MapPost("/api/ingest/initialize", ([FromBody] IngestInitializePayload payloa
         
         string template = File.ReadAllText(templatePath);
         string pythonCode = "";
+        string projectDbUri = GetProjectPostgresUri(config.PostgresUri, proj);
         
         if (payload.SourceType == "mongodb")
         {
             pythonCode = template
                 .Replace("{MONGO_URI}", config.MongoUri)
-                .Replace("{POSTGRES_URI}", config.PostgresUri)
+                .Replace("{POSTGRES_URI}", projectDbUri)
                 .Replace("{PROJECT}", proj)
                 .Replace("{TABLE_NAME}", payload.TableName);
         }
@@ -992,7 +1094,7 @@ app.MapPost("/api/ingest/initialize", ([FromBody] IngestInitializePayload payloa
             string containerFilePath = $"/home/src/my_mage_project/{proj}/bronze/data/{payload.TableName}{fileExt}";
 
             pythonCode = template
-                .Replace("{POSTGRES_URI}", config.PostgresUri)
+                .Replace("{POSTGRES_URI}", projectDbUri)
                 .Replace("{PROJECT}", proj)
                 .Replace("{TABLE_NAME}", payload.TableName)
                 .Replace("{FILE_PATH_HOST}", hostFilePath)
@@ -1007,7 +1109,7 @@ app.MapPost("/api/ingest/initialize", ([FromBody] IngestInitializePayload payloa
                 .Replace("{MYSQL_HOST}", config.MysqlHost)
                 .Replace("{MYSQL_PORT}", config.MysqlPort)
                 .Replace("{MYSQL_DATABASE}", config.MysqlDatabase)
-                .Replace("{POSTGRES_URI}", config.PostgresUri)
+                .Replace("{POSTGRES_URI}", projectDbUri)
                 .Replace("{PROJECT}", proj)
                 .Replace("{TABLE_NAME}", payload.TableName);
         }

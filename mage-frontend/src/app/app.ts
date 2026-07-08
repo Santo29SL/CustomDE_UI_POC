@@ -685,6 +685,7 @@ export class App implements OnInit, OnDestroy {
           this.sqlResults.set([]);
         }
         this.loadDbTables();
+        this.loadPipelines();
       },
       error: (err) => {
         this.executing.set(false);
@@ -764,12 +765,50 @@ export class App implements OnInit, OnDestroy {
   openFileForTable(schema: string, tableName: string) {
     const proj = this.projectName().toLowerCase().replace(/\s+/g, '_');
     let layerName = schema;
-    if (schema.startsWith(proj + "_")) {
+    if (schema.endsWith('_bronze')) {
+      layerName = 'bronze';
+    } else if (schema.endsWith('_silver')) {
+      layerName = 'silver';
+    } else if (schema.endsWith('_gold')) {
+      layerName = 'gold';
+    } else if (schema.startsWith(proj + "_")) {
       layerName = schema.substring(proj.length + 1);
     }
     
     let path = `my_mage_project/${proj}/${layerName}/${tableName}.sql`;
+    if (layerName === 'bronze') {
+      const found = this.findIngestionFile(layerName, tableName);
+      if (found) {
+        path = found;
+      }
+    }
     this.openFileByPath(path);
+  }
+
+  findIngestionFile(layer: string, tableName: string): string | null {
+    const proj = this.projectName().toLowerCase().replace(/\s+/g, '_');
+    const folderPath = `my_mage_project/${proj}/${layer}`;
+    const cleanTableName = tableName.toLowerCase().replace(/_/g, '');
+    
+    const nodes = this.fileTree();
+    const findInTree = (nodesList: FileNode[], pathPrefix: string): string | null => {
+      for (const node of nodesList) {
+        const currentPath = pathPrefix ? `${pathPrefix}/${node.name}` : node.name;
+        if (currentPath === folderPath && node.children) {
+          for (const child of node.children) {
+            const childNameClean = child.name.toLowerCase().replace(/_/g, '');
+            if (child.type === 'file' && (childNameClean.includes(cleanTableName) || cleanTableName.includes(childNameClean))) {
+              return `${currentPath}/${child.name}`;
+            }
+          }
+        } else if (node.children) {
+          const res = findInTree(node.children, currentPath);
+          if (res) return res;
+        }
+      }
+      return null;
+    };
+    return findInTree(nodes, '');
   }
 
   openFileByPath(targetPath: string) {

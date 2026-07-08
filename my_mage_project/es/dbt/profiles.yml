@@ -7,7 +7,7 @@ inventory_dbt:
       port: 5432
       user: postgres
       password: postgres
-      dbname: slinventoryDB
+      dbname: "{{ env_var('DB_NAME', 'expendsave') }}"
       schema: public # Overridden dynamically by macros for silver and gold
       threads: 4
       keepalives_idle: 0

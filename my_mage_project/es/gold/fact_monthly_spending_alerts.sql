@@ -1,6 +1,6 @@
-DROP TABLE IF EXISTS expendsave_gold.fact_monthly_spending_alerts CASCADE;
+DROP TABLE IF EXISTS es_gold.fact_monthly_spending_alerts CASCADE;
 
-CREATE TABLE expendsave_gold.fact_monthly_spending_alerts AS
+CREATE TABLE es_gold.fact_monthly_spending_alerts AS
 SELECT 
     t.user_id,
     u.username,
@@ -16,9 +16,9 @@ SELECT
         WHEN SUM(t.amount) > (u.monthly_salary * 0.15) THEN '⚠️ WARNING (15%-30%)'
         ELSE '🟢 SAFE (<15%)'
     END AS budget_status
-FROM expendsave_silver.stg_transactions t
-JOIN expendsave_silver.stg_users u ON t.user_id = u.user_id
+FROM es_silver.stg_transactions t
+JOIN es_silver.stg_users u ON t.user_id = u.user_id
 WHERE t.transaction_type = 'expense'
 GROUP BY t.user_id, u.username, TO_CHAR(t.transaction_date, 'YYYY-MM'), t.category, u.monthly_salary;
 
-ALTER TABLE expendsave_gold.fact_monthly_spending_alerts ADD PRIMARY KEY (user_id, billing_month, category);
+ALTER TABLE es_gold.fact_monthly_spending_alerts ADD PRIMARY KEY (user_id, billing_month, category);

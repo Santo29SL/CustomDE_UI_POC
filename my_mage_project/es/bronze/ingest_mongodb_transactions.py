@@ -33,23 +33,23 @@ def run_etl():
             
     df.columns = [c.lower() for c in df.columns]
 
-    print("📤 Loading records into postgres: expendsave_bronze.transactions...")
+    print("📤 Loading records into postgres: es_bronze.transactions...")
     pg_engine = create_engine(POSTGRES_URI)
     
     # Check if table exists first
     table_exists = False
     try:
         with pg_engine.connect() as conn:
-            result = conn.execute(text("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'expendsave_bronze' AND table_name = 'transactions');"))
+            result = conn.execute(text("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'es_bronze' AND table_name = 'transactions');"))
             table_exists = result.scalar()
     except Exception:
         pass
 
     with pg_engine.begin() as conn:
-        conn.execute(text("CREATE SCHEMA IF NOT EXISTS expendsave_bronze;"))
+        conn.execute(text("CREATE SCHEMA IF NOT EXISTS es_bronze;"))
         if table_exists:
-            conn.execute(text("TRUNCATE TABLE expendsave_bronze.transactions CASCADE;"))
-        df.to_sql(name="transactions", con=conn, schema="expendsave_bronze", if_exists="append", index=False)
+            conn.execute(text("TRUNCATE TABLE es_bronze.transactions CASCADE;"))
+        df.to_sql(name="transactions", con=conn, schema="es_bronze", if_exists="append", index=False)
         print(f"✅ Successfully loaded {len(df)} records.")
 
 if __name__ == "__main__":

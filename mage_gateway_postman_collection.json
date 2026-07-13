@@ -1,0 +1,562 @@
+{
+  "info": {
+    "_postman_id": "8c4125b2-a6f9-4672-88f5-df1b9975b9f7",
+    "name": "Mage Medallion Platform API Gateway",
+    "description": "Postman collection for testing the .NET Minimal API Gateway (Port 5050) running alongside the Custom GUI Airflow & Mage Medallion platform.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Configuration & Metadata",
+      "item": [
+        {
+          "name": "Get Platform Settings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/metadata",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "metadata"
+              ]
+            },
+            "description": "Retrieves the current workspace paths, database URIs, Docker container name, and active project settings."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Platform Settings",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectName\": \"my_mage_project\",\n  \"workspacePath\": \"/Users/santhoshsl/Custom_GUI_Airflow\",\n  \"executionMode\": \"docker\",\n  \"dockerContainerName\": \"cranky_faraday\",\n  \"postgresUri\": \"postgresql://postgres:postgres@localhost:5432/expendsave\",\n  \"mongoUri\": \"mongodb://localhost:27017/expendsave\",\n  \"mysqlHost\": \"localhost\",\n  \"mysqlPort\": \"3306\",\n  \"mysqlUser\": \"root\",\n  \"mysqlPassword\": \"password\",\n  \"mysqlDatabase\": \"mysqldb\",\n  \"mageUrl\": \"http://localhost:6789/api\",\n  \"mageApiKey\": \"\",\n  \"supersetUrl\": \"http://localhost:8088\",\n  \"projectType\": \"python\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/metadata",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "metadata"
+              ]
+            },
+            "description": "Overwrites the current backend settings configuration (saved in config.json)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Project & Workspace Management",
+      "item": [
+        {
+          "name": "List Projects in Workspace",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/workspace/projects",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "workspace",
+                "projects"
+              ]
+            },
+            "description": "Lists all subdirectories under the workspace path (excluding dotfiles, node_modules, logs, etc.)."
+          },
+          "response": []
+        },
+        {
+          "name": "List Workspace Files (Tree View)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/workspace/files",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "workspace",
+                "files"
+              ]
+            },
+            "description": "Builds a recursive directory/file tree hierarchy of the active project (Bronze/Silver/Gold) to render the navigation pane."
+          },
+          "response": []
+        },
+        {
+          "name": "Initialize Project Directory Structure",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectName\": \"my_mage_project\",\n  \"projectType\": \"python\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/project/initialize",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "project",
+                "initialize"
+              ]
+            },
+            "description": "Creates a new project folder under the workspace path with default subdirectories: bronze, silver, gold, and dbt."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Project Directory",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/project?projectName=my_mage_project_temp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "project"
+              ],
+              "query": [
+                {
+                  "key": "projectName",
+                  "value": "my_mage_project_temp",
+                  "description": "Name of the project directory to delete"
+                }
+              ]
+            },
+            "description": "Removes a project folder and its contents recursively from the workspace."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "File Operations & Monaco Editor Sync",
+      "item": [
+        {
+          "name": "Read File Content",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/workspace/file?filename=my_mage_project/bronze/ingest_mongodb_users.py",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "workspace",
+                "file"
+              ],
+              "query": [
+                {
+                  "key": "filename",
+                  "value": "my_mage_project/bronze/ingest_mongodb_users.py",
+                  "description": "Relative workspace file path to read"
+                }
+              ]
+            },
+            "description": "Reads and returns the raw string content of a specific file in the workspace."
+          },
+          "response": []
+        },
+        {
+          "name": "Write or Overwrite File Content",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"filename\": \"my_mage_project/bronze/test_script.py\",\n  \"code\": \"print('Hello from Postman testing!')\\n\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/workspace/file",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "workspace",
+                "file"
+              ]
+            },
+            "description": "Creates or updates a file in the workspace with the provided source code or configuration."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete File",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/workspace/file?filename=my_mage_project/bronze/test_script.py",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "workspace",
+                "file"
+              ],
+              "query": [
+                {
+                  "key": "filename",
+                  "value": "my_mage_project/bronze/test_script.py",
+                  "description": "Relative workspace path of the file to delete"
+                }
+              ]
+            },
+            "description": "Permanently deletes a file from the workspace filesystem."
+          },
+          "response": []
+        },
+        {
+          "name": "Rename File",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"oldFilename\": \"my_mage_project/bronze/old_name.py\",\n  \"newFilename\": \"my_mage_project/bronze/new_name.py\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/workspace/rename",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "workspace",
+                "rename"
+              ]
+            },
+            "description": "Renames a file in the workspace. Returns the status of the rename operation."
+          },
+          "response": []
+        },
+        {
+          "name": "Execute Notebook Code / Script",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fileName\": \"my_mage_project/silver/preview_query.sql\",\n  \"code\": \"SELECT * FROM expendsave_bronze.transactions LIMIT 5;\",\n  \"language\": \"sql\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/workspace/execute",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "workspace",
+                "execute"
+              ]
+            },
+            "description": "Executes SQL select queries, DDL/DML, or Python scripts. If executing SQL select queries, returns a `gridData` object of results; otherwise returns terminal output logs."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "PostgreSQL Inspections & Schema Hub",
+      "item": [
+        {
+          "name": "List Postgres Database Tables",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/workspace/postgres-tables",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "workspace",
+                "postgres-tables"
+              ]
+            },
+            "description": "Discovers all schemas and tables in PostgreSQL belonging to the project (e.g. bronze, silver, gold layers)."
+          },
+          "response": []
+        },
+        {
+          "name": "Preview Table (Top 100 Rows)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"schemaName\": \"expendsave_bronze\",\n  \"tableName\": \"users\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/workspace/preview",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "workspace",
+                "preview"
+              ]
+            },
+            "description": "Retrieves the first 100 records from the selected schema and table in JSON format to display in the data grid."
+          },
+          "response": []
+        },
+        {
+          "name": "Drop PostgreSQL Table",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/workspace/postgres-table?schemaName=expendsave_bronze&tableName=temp_table",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "workspace",
+                "postgres-table"
+              ],
+              "query": [
+                {
+                  "key": "schemaName",
+                  "value": "expendsave_bronze",
+                  "description": "Target schema containing the table"
+                },
+                {
+                  "key": "tableName",
+                  "value": "temp_table",
+                  "description": "Name of the table to drop"
+                }
+              ]
+            },
+            "description": "Performs a 'DROP TABLE CASCADE' on the chosen schema and table in PostgreSQL."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Data Ingestion & Pipeline Orchestration",
+      "item": [
+        {
+          "name": "Upload CSV/Parquet Data File",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "Upload a CSV or Parquet file (.csv, .parquet)"
+                },
+                {
+                  "key": "tableName",
+                  "value": "uploaded_transactions",
+                  "type": "text",
+                  "description": "Destination table name"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ingest/upload",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ingest",
+                "upload"
+              ]
+            },
+            "description": "Uploads a raw CSV or Parquet file, saving it inside the project's `bronze/data` workspace directory."
+          },
+          "response": []
+        },
+        {
+          "name": "Initialize Ingestion Python Script",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceType\": \"mongodb\",\n  \"tableName\": \"transactions\",\n  \"fileExtension\": null\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ingest/initialize",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ingest",
+                "initialize"
+              ]
+            },
+            "description": "Generates a Python ingestion script in the `bronze` folder using pre-packaged templates based on the chosen source type (e.g. mongodb, mysql, localfile)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Mage Pipeline Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/pipelines",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "pipelines"
+              ]
+            },
+            "description": "Scans local workspace script layers, calls Mage AI status container, and consolidates the active pipeline status and execution block configurations."
+          },
+          "response": []
+        },
+        {
+          "name": "Run Pipeline Execution Sequence",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/pipelines/ims_postgres_pipeline/run",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "pipelines",
+                "ims_postgres_pipeline",
+                "run"
+              ]
+            },
+            "description": "Triggers the execution sequence for the specified pipeline (e.g. `ims_postgres_pipeline`). Runs all associated tasks inside the Docker container or local CLI."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5050",
+      "type": "string"
+    }
+  ]
+}

@@ -586,7 +586,7 @@ app.MapGet("/api/workspace/projects", () => {
         foreach (var dir in Directory.GetDirectories(path))
         {
             var dirName = Path.GetFileName(dir);
-            if (dirName.StartsWith(".") || dirName == "node_modules" || dirName == "obj" || dirName == "bin" || dirName == "target" || dirName == "logs" || dirName == "dbt") 
+            if (dirName.StartsWith(".") || dirName == "node_modules" || dirName == "obj" || dirName == "bin" || dirName == "target" || dirName == "logs" || dirName == "dbt" || dirName == "MageGateway" || dirName == "mage-frontend") 
                 continue;
             list.Add(dirName);
         }
